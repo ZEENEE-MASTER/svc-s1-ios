@@ -39,10 +39,13 @@ jobs:
           XCF="$(find sdl -name 'SDL2.xcframework' -maxdepth 5 | head -1)"
           test -n "$XCF"
           ls "$XCF"
-          HDR="$(find "$XCF" -name SDL_config.h | head -1 | xargs dirname)"
+          # Prefer the device slice; absolute path (archive step runs in engine/).
+          HDR_CAND="$(find "$XCF" -name SDL_config.h -path '*ios-arm64/*' | head -1)"
+          HDR="${HDR_CAND:-$(find "$XCF" -name SDL_config.h | head -1)}"
           test -n "$HDR"
-          echo "XCF_HEADERS=$HDR" >> "$GITHUB_ENV"
-          ls "$HDR/SDL.h"
+          HDR_DIR="$(dirname "$HDR")"
+          echo "XCF_HEADERS=$GITHUB_WORKSPACE/$HDR_DIR" >> "$GITHUB_ENV"
+          ls "$HDR_DIR/SDL.h" "$HDR_DIR/SDL_config.h"
       - name: Native deps (libvpx + FFmpeg + libxmp, static)
         run: |
           set -euo pipefail
