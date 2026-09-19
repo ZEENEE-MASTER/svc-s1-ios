@@ -2,22 +2,19 @@
 
 Source of truth for phase status. Update as spikes resolve.
 
-## Phase 0 — Scaffold + CI spike (NOW)
+## Phase 0 — Scaffold + CI spike (DONE 2026-09-19)
 
-- [x] Asset inventory (`assets/manifest.txt`: 1,165 files, 2.81 GB)
-- [x] Dedupe audit: `backup/` zips waste ~734 MB, several byte-identical
-      duplicates across `chars/*/backup/` (verified SHA-256)
-- [x] Wrapper skeleton → completed shell (bridge, gamepad, downloader+miniz)
-- [x] Engine iOS fork: `ZEENEE-MASTER/svc-engine-ios@ios-port`
-      (25-line patch set + `src/util_ios.go`; gofmt-clean; BOM/LF verified)
-- [x] S1 Lite packs built (`F:\svc-packs`, iOS-safe forward-slash zips)
-- [ ] **BLOCKED: GitHub Actions billing** — runs fail in ~10 s with
-      "recent account payments have failed or your spending limit needs to be
-      increased". Fix: github.com → Settings → Billing and plans → update
-      payment method / raise spending limit. Then re-run the `ios-port`
-      workflow. No code change needed on our side.
-- [ ] First green `spike-engine-ios` run on `macos-15` runner
-- [ ] SDL2 xcframework builds on runner
+- [x] Asset inventory, dedupe audit, wrapper shell, engine fork, Lite packs
+- [x] CI green: `engine-archive` (GOOS=ios c-archive + FFmpeg/libxmp/SDL2)
+      and `game-ipa` (S1-game-unsigned.ipa, 734.6 MB, SHA-256
+      `4F1B7511…DA58E7`, bundled payload-lite.zip, repos re-privated)
+
+## Phase 1b — Engine linked (DONE: archive force-loaded into the app)
+
+Remaining device-side verification (needs Sideloadly install + Apple ID):
+- [ ] First launch: payload unzip to Documents, menu boot, Ryu vs Sonic fight
+- [ ] Touch latency + 60 fps check; lower AfterImageMax/ExplodMax if needed
+- [ ] Audio (mp3/wav BGM + voices) and .webm intros via FFmpeg path
 
 ## Phase 1 — Engine on iOS (biggest risks)
 
