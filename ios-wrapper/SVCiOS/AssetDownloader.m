@@ -70,6 +70,23 @@
       *note = @"present";
     return YES;
   }
+  // Side-loaded zip: user drops payload-lite.zip via the Files app.
+  NSString *sidecar = [[self documentsDir]
+      stringByAppendingPathComponent:@"payload-lite.zip"];
+  if ([[NSFileManager defaultManager] fileExistsAtPath:sidecar]) {
+    BOOL ok = [self unzipFile:sidecar
+                        toDir:[self documentsDir]
+                     progress:progress];
+    if (ok && [self payloadPresent]) {
+      [[NSFileManager defaultManager] removeItemAtPath:sidecar error:nil];
+      if (note)
+        *note = @"side-loaded zip installed";
+      return YES;
+    }
+    if (note)
+      *note = @"side-loaded zip present but payload incomplete after unzip";
+    return NO;
+  }
   NSString *bundled = [[NSBundle mainBundle] pathForResource:@"payload-lite"
                                                       ofType:@"zip"];
   if (bundled) {

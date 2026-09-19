@@ -151,7 +151,7 @@ jobs:
           xcodebuild -project SVC_S1.xcodeproj -scheme SVC_S1 -configuration Release \
             -sdk iphoneos -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY=""
-      - name: Package game IPA
+      - name: Package game IPA (+ slim without payload)
         run: |
           set -euo pipefail
           cd ios-wrapper
@@ -159,7 +159,16 @@ jobs:
           cp -R "build/Build/Products/Release-iphoneos/SVC_S1.app" Payload/
           zip -r S1-game-unsigned.ipa Payload
           shasum -a 256 S1-game-unsigned.ipa
+          rm -rf SlimPayload && mkdir -p SlimPayload/Payload
+          cp -R "build/Build/Products/Release-iphoneos/SVC_S1.app" SlimPayload/Payload/
+          rm -f SlimPayload/Payload/SVC_S1.app/payload-lite.zip
+          (cd SlimPayload && zip -r ../S1-game-slim-unsigned.ipa Payload)
+          shasum -a 256 S1-game-slim-unsigned.ipa
       - uses: actions/upload-artifact@v4
         with:
           name: S1-game-unsigned-ipa
           path: ios-wrapper/S1-game-unsigned.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: S1-game-slim-unsigned-ipa
+          path: ios-wrapper/S1-game-slim-unsigned.ipa
