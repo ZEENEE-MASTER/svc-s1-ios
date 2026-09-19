@@ -50,6 +50,16 @@ def main() -> None:
           'if runtime.GOOS != "android" {',
           'if runtime.GOOS != "android" && runtime.GOOS != "ios" {')
 
+    # iOS EAGL maxes out at GLES 3.0: a 3.2 context can never be created.
+    patch(src / "main.go",
+          '\t\tsdl.GLSetAttribute(sdl.GL_CONTEXT_MAJOR_VERSION, 3)\n\t\tsdl.GLSetAttribute(sdl.GL_CONTEXT_MINOR_VERSION, 2)',
+          '\t\tsdl.GLSetAttribute(sdl.GL_CONTEXT_MAJOR_VERSION, 3)\n\t\tif runtime.GOOS == "ios" {\n\t\t\tsdl.GLSetAttribute(sdl.GL_CONTEXT_MINOR_VERSION, 0)\n\t\t} else {\n\t\t\tsdl.GLSetAttribute(sdl.GL_CONTEXT_MINOR_VERSION, 2)\n\t\t}')
+
+    # ...and 320 es shaders would never compile on it: inject 300 es on iOS.
+    patch(src / "render_gles32.go",
+          '\t\t// Anchor to 320 es for best feature compatibility\n\t\theader := "#version 320 es\\n"',
+          '\t\t// Anchor to 320 es for best feature compatibility\n\t\theader := "#version 320 es\\n"\n\t\tif runtime.GOOS == "ios" {\n\t\t\theader = "#version 300 es\\n"\n\t\t}')
+
     # main.go init(): SDL main thread must be locked on iOS too.
     patch(src / "main.go",
           'if runtime.GOOS != "android" {\n\t\truntime.LockOSThread()\n\t}',
