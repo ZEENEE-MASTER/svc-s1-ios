@@ -1,5 +1,5 @@
 # Probe2: raw UIKit delegate (proven) + SDL_Init + SDL window + GLES.
-// Answers: is SDL2/EAGL alive on this OS, or is SDL the launch killer?
+# Answers: is SDL2/EAGL alive on this OS, or is SDL the launch killer?
 name: probe2
 
 on:
