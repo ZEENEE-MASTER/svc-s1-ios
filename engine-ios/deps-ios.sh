@@ -70,13 +70,16 @@ if [ ! -f "$PREFIX/lib/libxmp.a" ]; then
   cmake --install "$WORK/libxmp-ios"
 else echo "    cached"; fi
 
-echo "==> sdl2.pc (headers from SDL2.xcframework)"
-mkdir -p "$PREFIX/lib/pkgconfig"
+echo "==> sdl2.pc (SDL2/ symlink tree -> xcframework headers)"
+mkdir -p "$PREFIX/include/SDL2" "$PREFIX/lib/pkgconfig"
+for h in "$SDL_HEADERS"/*.h; do
+  ln -sf "$h" "$PREFIX/include/SDL2/$(basename "$h")"
+done
 cat > "$PREFIX/lib/pkgconfig/sdl2.pc" <<EOF
 prefix=$PREFIX
 exec_prefix=\${prefix}
 libdir=\${exec_prefix}/lib
-includedir=$SDL_HEADERS
+includedir=\${prefix}/include
 Name: sdl2
 Description: Simple DirectMedia Layer (iOS xcframework headers)
 Version: 2.32.10
