@@ -1,0 +1,68 @@
+# Probe: pure-UIKit HELLO IPA. No SDL, no engine, no payload.
+# Isolates pipeline/signing/device vs app-code causes of the black screen.
+name: probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe-ipa:
+    runs-on: macos-15
+    steps:
+      - name: Build HELLO app
+        run: |
+          set -euo pipefail
+          SDKROOT="$(xcrun --sdk iphoneos --show-sdk-path)"
+          mkdir -p probe Payload/ProbeApp.app
+          cat > probe/main.m <<'EOF'
+          #import <UIKit/UIKit.h>
+          @interface D : UIResponder <UIApplicationDelegate>
+          @property (strong, nonatomic) UIWindow *window;
+          @end
+          @implementation D
+          - (BOOL)application:(UIApplication *)a didFinishLaunchingWithOptions:(NSDictionary *)o {
+            self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+            UIViewController *r = [[UIViewController alloc] init];
+            r.view.backgroundColor = [UIColor systemGreenColor];
+            UILabel *l = [[UILabel alloc] initWithFrame:r.view.bounds];
+            l.text = @"HELLO FROM SVC PIPELINE";
+            l.textAlignment = NSTextAlignmentCenter;
+            l.numberOfLines = 0;
+            [r.view addSubview:l];
+            self.window.rootViewController = r;
+            [self.window makeKeyAndVisible];
+            return YES;
+          }
+          @end
+          int main(int argc, char *argv[]) {
+            @autoreleasepool {
+              return UIApplicationMain(argc, argv, nil, NSStringFromClass([D class]));
+            }
+          }
+          EOF
+          xcrun clang -arch arm64 -miphoneos-version-min=17.0 \
+            -isysroot "$SDKROOT" -framework UIKit -framework Foundation \
+            -o Payload/ProbeApp.app/ProbeApp probe/main.m
+          cat > Payload/ProbeApp.app/Info.plist <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+          	<key>CFBundleExecutable</key><string>ProbeApp</string>
+          	<key>CFBundleIdentifier</key><string>com.zeenee.svc-probe</string>
+          	<key>CFBundleName</key><string>Probe</string>
+          	<key>CFBundlePackageType</key><string>APPL</string>
+          	<key>CFBundleShortVersionString</key><string>1.0</string>
+          	<key>CFBundleVersion</key><string>1</string>
+          	<key>LSRequiresIPhoneOS</key><true/>
+          	<key>MinimumOSVersion</key><string>17.0</string>
+          	<key>UILaunchScreen</key><dict/>
+          	<key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
+          </dict>
+          </plist>
+          EOF
+          cd Payload && zip -r ../Probe.ipa ProbeApp.app && cd ..
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Probe-ipa
+          path: Probe.ipa
