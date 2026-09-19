@@ -26,10 +26,28 @@ targets:
         CODE_SIGN_IDENTITY: ""
         ENABLE_BITCODE: "NO"
         FRAMEWORK_SEARCH_PATHS: ["$(inherited)", "$(SRCROOT)/third-party/**"]
-        OTHER_LDFLAGS: ["-weak_framework", "GameController"]
+        OTHER_LDFLAGS: [
+          "$(inherited)",
+          "-force_load", "$(SRCROOT)/third-party/libsvcengine.a",
+          "-lz", "-lbz2", "-liconv",
+          "-framework", "AVFoundation",
+          "-framework", "AudioToolbox",
+          "-framework", "VideoToolbox",
+          "-framework", "CoreMedia",
+          "-framework", "CoreVideo",
+          "-weak_framework", "GameController",
+        ]
     dependencies:
       - framework: third-party/SDL2.xcframework
         embed: true
-      # Phase 1b: engine xcframework from gomobile bind.
-      # - framework: third-party/SVCEngine.xcframework
-      #   embed: true
+    libraries:
+      - third-party/libavformat.a
+      - third-party/libavcodec.a
+      - third-party/libavutil.a
+      - third-party/libswscale.a
+      - third-party/libswresample.a
+      - third-party/libavfilter.a
+      - third-party/libvpx.a
+      - third-party/libxmp.a
+    resources:
+      - SVCiOS/Resources

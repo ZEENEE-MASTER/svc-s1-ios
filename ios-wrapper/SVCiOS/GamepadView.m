@@ -1,6 +1,10 @@
 // Full touch fight-stick: 4-dir + 6-button + start/menu, multi-touch,
 // drag-to-arrange edit mode persisted to NSUserDefaults.
-// Event injection into the engine is Phase-2b (see SVC_PAD_INJECT below).
+// Input reaches the engine as SDL keyboard events matching save/config.ini
+// [Keys_P1] (dirs=arrows, A=a B=s C=d X=z Y=x Z=c, Start=Return, Menu=e).
+// The engine polls these in system_sdl.go pollEvents -> OnKeyPressed.
+#define SDL_MAIN_HANDLED
+#import <SDL2/SDL.h>
 #import "GamepadView.h"
 
 static NSString *const kPadLayoutKey = @"SVCGamepadLayoutV1";
@@ -79,11 +83,35 @@ static NSString *const kPadLayoutKey = @"SVCGamepadLayoutV1";
 }
 
 - (void)press:(NSNumber *)btn down:(BOOL)down {
-  // SVC_PAD_INJECT (Phase-2b): route into engine input here —
-  // virtual keyboard event via SDL (SDL_PushEvent KEYDOWN/KEYUP mapped to
-  // config.ini [Keys_P1]) or direct engine hook. Until then: delegate only.
+  if (SDL_WasInit(SDL_INIT_VIDEO)) {
+    SDL_Event ev;
+    SDL_memset(&ev, 0, sizeof(ev));
+    ev.type = down ? SDL_KEYDOWN : SDL_KEYUP;
+    ev.key.state = down ? SDL_PRESSED : SDL_RELEASED;
+    ev.key.keysym.sym = [self keycodeForButton:(SVCGameButton)[btn integerValue]];
+    SDL_PushEvent(&ev);
+  }
   [self.delegate gamepadButton:(SVCGameButton)[btn integerValue] pressed:down];
   [self setNeedsDisplay];
+}
+
+// Must match save/config.ini [Keys_P1].
+- (SDL_Keycode)keycodeForButton:(SVCGameButton)btn {
+  switch (btn) {
+    case SVCGameButtonUp: return SDLK_UP;
+    case SVCGameButtonDown: return SDLK_DOWN;
+    case SVCGameButtonLeft: return SDLK_LEFT;
+    case SVCGameButtonRight: return SDLK_RIGHT;
+    case SVCGameButtonA: return SDLK_a;
+    case SVCGameButtonB: return SDLK_s;
+    case SVCGameButtonC: return SDLK_d;
+    case SVCGameButtonX: return SDLK_z;
+    case SVCGameButtonY: return SDLK_x;
+    case SVCGameButtonZ: return SDLK_c;
+    case SVCGameButtonStart: return SDLK_RETURN;
+    case SVCGameButtonMenu: return SDLK_e;
+  }
+  return SDLK_UNKNOWN;
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {

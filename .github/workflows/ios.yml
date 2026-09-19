@@ -1,7 +1,5 @@
-# Phase-0 CI: prove the toolchain on a cloud Mac, then package a smoke-test IPA.
-# Job 1 (spike-engine-ios) is EXPECTED to need iteration — FFmpeg/libxmp for
-# iOS are the known unknowns. Logs are the deliverable until it goes green.
-# Job 2 builds the ObjC shell + SDL so touch/layout work can start on-device.
+# iOS port CI: engine static archive + full game IPA (unsigned, sideload).
+# All shells: set -euo pipefail (a masked cgo/pkg-config failure cost us a cycle).
 name: ios-port
 
 on:
@@ -15,10 +13,11 @@ env:
   ENGINE_REF: ios-port
   MIN_IOS: "17.0"
   BUNDLE_ID: com.zeenee.svc-s1
+  PAYLOAD_TAG: s1-payload
 
 jobs:
-  spike-engine-ios:
-    name: Spike — Go engine for iOS (GOOS=ios, gles2)
+  engine-archive:
+    name: Engine static archive (GOOS=ios, GLES2)
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -32,43 +31,75 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
-      - name: Xcode version
-        run: xcodebuild -version; xcrun --sdk iphoneos --show-sdk-version
-      - name: gomobile init
+      - name: SDL2 headers (for cgo compile)
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch release-2.32.10 https://github.com/libsdl-org/SDL.git sdl
+          xcodebuild -project sdl/Xcode/SDL/SDL.xcodeproj -target xcFramework-iOS -configuration Release
+          XCF="$(find sdl -name 'SDL2.xcframework' -maxdepth 5 | head -1)"
+          test -n "$XCF"
+          echo "XCF_HEADERS=$XCF/ios-arm64/Headers" >> "$GITHUB_ENV"
+          ls "$XCF/ios-arm64/Headers/SDL_config.h"
+      - name: Native deps (libvpx + FFmpeg + libxmp, static)
+        run: |
+          set -euo pipefail
+          bash "$GITHUB_WORKSPACE/engine-ios/deps-ios.sh" \
+            "$GITHUB_WORKSPACE/ios-deps" "$GITHUB_WORKSPACE/dep-src" "$XCF_HEADERS"
+      - name: Archive — engine for iOS arm64
         working-directory: engine
         run: |
-          go install golang.org/x/mobile/cmd/gomobile@latest
-          gomobile init
-      - name: Compile check — engine for iOS arm64 (gles2 path)
-        working-directory: engine
-        run: |
+          set -euo pipefail
           export GOOS=ios GOARCH=arm64 CGO_ENABLED=1 GOEXPERIMENT=arenas
           export CC="$(xcrun --sdk iphoneos --find clang)"
           export CXX="${CC}++"
-          export CGO_CFLAGS="-isysroot $(xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=${MIN_IOS} -arch arm64"
-          export CGO_LDFLAGS="$CGO_CFLAGS"
-          go build -tags=gles2 -o /tmp/svc-engine-check.a ./src 2>&1 | tee /tmp/ios-spike.log
-          echo "--- SPIKE LOG (tail) ---"; tail -50 /tmp/ios-spike.log
+          SDKROOT="$(xcrun --sdk iphoneos --show-sdk-path)"
+          export PKG_CONFIG_PATH="$GITHUB_WORKSPACE/ios-deps/lib/pkgconfig"
+          export CGO_CFLAGS="-isysroot $SDKROOT -miphoneos-version-min=${MIN_IOS} -arch arm64 -I$GITHUB_WORKSPACE/ios-deps/include"
+          export CGO_LDFLAGS="-isysroot $SDKROOT -miphoneos-version-min=${MIN_IOS} -arch arm64 -L$GITHUB_WORKSPACE/ios-deps/lib"
+          go mod download
+          go build -buildmode=c-archive -trimpath \
+            -o "$GITHUB_WORKSPACE/libsvcengine.a" ./src 2>&1 | tee /tmp/ios-archive.log
+          ls -la "$GITHUB_WORKSPACE/libsvcengine.a"
+          echo "--- exports ---"
+          xcrun --sdk iphoneos nm -g "$GITHUB_WORKSPACE/libsvcengine.a" 2>/dev/null | grep -E "SDL_main|SVCSetBaseDir" | head
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ios-spike-log
-          path: /tmp/ios-spike.log
+          name: ios-archive-log
+          path: /tmp/ios-archive.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libsvcengine
+          path: |
+            libsvcengine.a
+            libsvcengine.h
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-deps
+          path: ios-deps
 
-  shell-ipa:
-    name: Wrapper shell IPA (unsigned, smoke test)
+  game-ipa:
+    name: Game IPA (unsigned, sideload)
     runs-on: macos-15
+    needs: engine-archive
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: libsvcengine
+          path: ios-wrapper/third-party
+      - uses: actions/download-artifact@v4
+        with:
+          name: ios-deps
+          path: ios-deps
       - name: SDL2 xcframework (2.32.10, sha-pinned)
         run: |
-          set -e
+          set -euo pipefail
           mkdir -p ios-wrapper/third-party
           curl -sL -o /tmp/SDL2.dmg https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-2.32.10.dmg
           echo "4a7ac31640d70214e848f994be8a12849c0f97918a7e6c2e27a40036166d1a7f  /tmp/SDL2.dmg" | shasum -a 256 -c -
           hdiutil attach /tmp/SDL2.dmg -nobrowse -quiet
           VOL="$(ls -d /Volumes/SDL2* | head -1)"
-          echo "mounted: $VOL"; ls "$VOL"
           if [ -d "$VOL/SDL2.xcframework" ]; then
             cp -R "$VOL/SDL2.xcframework" ios-wrapper/third-party/
           else
@@ -81,23 +112,48 @@ jobs:
           fi
           hdiutil detach "$VOL" -quiet || true
           ls ios-wrapper/third-party/
+      - name: Native dep archives (from engine job)
+        run: |
+          set -euo pipefail
+          cp ios-deps/lib/libavformat.a \
+             ios-deps/lib/libavcodec.a \
+             ios-deps/lib/libavutil.a \
+             ios-deps/lib/libswscale.a \
+             ios-deps/lib/libswresample.a \
+             ios-deps/lib/libavfilter.a \
+             ios-deps/lib/libvpx.a \
+             ios-deps/lib/libxmp.a \
+             ios-wrapper/third-party/
+          ls ios-wrapper/third-party/
+      - name: Payload (S1 Lite, release asset)
+        run: |
+          set -euo pipefail
+          mkdir -p ios-wrapper/SVCiOS/Resources
+          gh release download "$PAYLOAD_TAG" -p 'payload-lite.zip' \
+            -D ios-wrapper/SVCiOS/Resources --repo "$GITHUB_REPOSITORY"
+          ls -la ios-wrapper/SVCiOS/Resources/
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Generate Xcode project
         run: |
           brew install xcodegen
           cd ios-wrapper && xcodegen generate
       - name: Build unsigned app
         run: |
+          set -euo pipefail
           cd ios-wrapper
           xcodebuild -project SVC_S1.xcodeproj -scheme SVC_S1 -configuration Release \
             -sdk iphoneos -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY=""
-      - name: Package unsigned IPA
+      - name: Package game IPA
         run: |
+          set -euo pipefail
           cd ios-wrapper
-          mkdir -p Payload && cp -R "build/Build/Products/Release-iphoneos/SVC_S1.app" Payload/
-          zip -r S1-shell-unsigned.ipa Payload
-          shasum -a 256 S1-shell-unsigned.ipa
+          rm -rf Payload && mkdir -p Payload
+          cp -R "build/Build/Products/Release-iphoneos/SVC_S1.app" Payload/
+          zip -r S1-game-unsigned.ipa Payload
+          shasum -a 256 S1-game-unsigned.ipa
       - uses: actions/upload-artifact@v4
         with:
-          name: S1-shell-unsigned-ipa
-          path: ios-wrapper/S1-shell-unsigned.ipa
+          name: S1-game-unsigned-ipa
+          path: ios-wrapper/S1-game-unsigned.ipa
