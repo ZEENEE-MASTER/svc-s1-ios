@@ -16,7 +16,7 @@ jobs:
           git clone --depth 1 --branch release-2.32.10 https://github.com/libsdl-org/SDL.git sdl
           xcodebuild -project sdl/Xcode/SDL/SDL.xcodeproj -target xcFramework-iOS -configuration Release
           XCF="$(find sdl -name 'SDL2.xcframework' -maxdepth 5 | head -1)"
-          SLICE="$(find "$XCF" -name SDL2.framework -path '*ios-arm64*' | head -1)"
+          SLICE="$(find "$XCF" -name SDL2.framework | grep -v -i simulator | head -1)"
           test -n "$SLICE"
           HDR="$SLICE/Headers"
           ls "$HDR/SDL.h" "$HDR/SDL_config.h"
