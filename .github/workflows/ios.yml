@@ -11,8 +11,8 @@ on:
 
 env:
   GO_VERSION: "1.27.0"
-  ENGINE_REPO: https://github.com/ikemen-engine/Ikemen-GO.git
-  ENGINE_REF: v1.0.0
+  ENGINE_REPO: https://github.com/ZEENEE-MASTER/svc-engine-ios.git
+  ENGINE_REF: ios-port
   MIN_IOS: "17.0"
   BUNDLE_ID: com.zeenee.svc-s1
 
@@ -21,8 +21,12 @@ jobs:
     name: Spike — Go engine for iOS (GOOS=ios, gles2)
     runs-on: macos-15
     steps:
-      - name: Checkout engine
+      - name: Checkout engine fork
         run: git clone --depth 1 --branch "$ENGINE_REF" "$ENGINE_REPO" engine
+      - name: Apply iOS port (idempotent check)
+        run: |
+          python3 "$GITHUB_WORKSPACE/engine-ios/apply-ios-port.py" engine "$GITHUB_WORKSPACE/engine-ios/util_ios.go"
+          git -C engine diff --stat
       - name: Setup Go
         uses: actions/setup-go@v6
         with:

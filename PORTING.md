@@ -6,10 +6,16 @@ Source of truth for phase status. Update as spikes resolve.
 
 - [x] Asset inventory (`assets/manifest.txt`: 1,165 files, 2.81 GB)
 - [x] Dedupe audit: `backup/` zips waste ~734 MB, several byte-identical
-      duplicates across `chars/*/backup/` (verified SHA-256, e.g. `663DFE25…`,
-      `C253D2A4…`, `2B412D53…` repeated 2–3×)
-- [x] Wrapper skeleton (programmatic UIKit + SDL bootstrap + gamepad stub)
-- [x] macOS CI workflow (engine iOS compile spike + IPA packaging)
+      duplicates across `chars/*/backup/` (verified SHA-256)
+- [x] Wrapper skeleton → completed shell (bridge, gamepad, downloader+miniz)
+- [x] Engine iOS fork: `ZEENEE-MASTER/svc-engine-ios@ios-port`
+      (25-line patch set + `src/util_ios.go`; gofmt-clean; BOM/LF verified)
+- [x] S1 Lite packs built (`F:\svc-packs`, iOS-safe forward-slash zips)
+- [ ] **BLOCKED: GitHub Actions billing** — runs fail in ~10 s with
+      "recent account payments have failed or your spending limit needs to be
+      increased". Fix: github.com → Settings → Billing and plans → update
+      payment method / raise spending limit. Then re-run the `ios-port`
+      workflow. No code change needed on our side.
 - [ ] First green `spike-engine-ios` run on `macos-15` runner
 - [ ] SDL2 xcframework builds on runner
 

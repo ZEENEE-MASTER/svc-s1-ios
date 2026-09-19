@@ -1,12 +1,13 @@
 // SVC S1 — iOS entry point. Programmatic UIKit, no storyboards/XIBs.
-// SDL2 iOS pattern per docs/README-ios.md: main() must live in the app and
-// call SDL_UIKitRunApp with our SDL_main. (SDL_uikit_main.c equivalent.)
+// SDL2 iOS pattern per docs/README-ios.md: main() lives in the app and
+// calls SDL_UIKitRunApp. SDL_main itself is OWNED BY THE GO ENGINE
+// (svc-engine-ios src/util_ios.go, //export SDL_main) — mirroring how
+// ikemen-droid's libmain.so owns SDL_main on Android.
 #import <UIKit/UIKit.h>
 #include "SDL.h"
-
-// Forward: engine + gamepad, wired in Phase 1/2.
-extern int SVC_EngineMain(int argc, char *argv[]);
-@class SVCGamepadView;
+#import "SVCBridge.h"
+#import "GamepadView.h"
+#import "AssetDownloader.h"
 
 @interface SVCAppDelegate : UIResponder <UIApplicationDelegate>
 @property (strong, nonatomic) UIWindow *window;
@@ -15,24 +16,33 @@ extern int SVC_EngineMain(int argc, char *argv[]);
 @implementation SVCAppDelegate
 - (BOOL)application:(UIApplication *)application
     didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+  // 1. Hand the engine its sandbox home (Documents/) before SDL starts.
+  NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
+                                                       NSUserDomainMask, YES);
+  NSString *docs = [paths firstObject];
+  SVCSetBaseDir([docs UTF8String]);
+
+  // 2. Ensure the Lite payload is present (bundled or downloaded).
+  //    Blocks the menu, not the engine: SDL_main waits on the same bridge.
+  [AssetDownloader ensurePayloadWithCompletion:^(BOOL ready, NSString *note) {
+    NSLog(@"[SVC-S1] payload: %@ (%@)", ready ? @"ready" : @"MISSING", note);
+  }];
+
+  // 3. Programmatic root; SDL creates its view, gamepad overlays it.
   self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
   UIViewController *root = [[UIViewController alloc] init];
   root.view.backgroundColor = [UIColor blackColor];
-  // NOTE: SDL creates its own window/view on top when the engine starts.
-  // Gamepad overlay (Phase 2) attaches to root.view.window above SDL's view.
   self.window.rootViewController = root;
   [self.window makeKeyAndVisible];
+
+  SVCGamepadView *pad = [[SVCGamepadView alloc]
+      initWithFrame:self.window.bounds];
+  pad.autoresizingMask =
+      UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+  [self.window addSubview:pad];
   return YES;
 }
 @end
-
-// SDL_main: called by SDL_UIKitRunApp on the app's main thread.
-int SDL_main(int argc, char *argv[]) {
-  // Phase 0: splash signal so a smoke-test IPA proves launch + SDL linkage.
-  // Phase 1: replace body with `return SVC_EngineMain(argc, argv);`
-  NSLog(@"[SVC-S1] bootstrap OK (Phase 0). Engine linkage pending.");
-  return 0;
-}
 
 int main(int argc, char *argv[]) {
   @autoreleasepool {

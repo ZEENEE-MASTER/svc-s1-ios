@@ -10,9 +10,11 @@ targets:
     type: application
     platform: iOS
     sources:
+      # Whole tree incl. vendor/miniz/*.c (compiled as plain C) and *.m.
       - path: SVCiOS
         excludes:
           - "Info.plist"
+          - "vendor/miniz/VENDOR.md"
     info:
       path: SVCiOS/Info.plist
     settings:
