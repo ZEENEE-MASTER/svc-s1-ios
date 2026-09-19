@@ -132,7 +132,7 @@
     NSString *all = [[NSString alloc] initWithData:prev encoding:NSUTF8StringEncoding];
     NSArray *lines = [all componentsSeparatedByString:@"\n"];
     NSUInteger n = lines.count, from = n > 12 ? n - 12 : 0;
-    prevTail = [lines subarrayWithRange:NSMakeRange(from, n - from)] componentsJoinedByString:@"\n"];
+    prevTail = [[lines subarrayWithRange:NSMakeRange(from, n - from)] componentsJoinedByString:@"\n"];
   }
   freopen([self.logPath UTF8String], "w", stderr);
   NSLog(@"[SVC-S1] launch: SVC S1 iOS boot");
