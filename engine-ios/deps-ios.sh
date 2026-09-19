@@ -83,7 +83,7 @@ includedir=\${prefix}/include
 Name: sdl2
 Description: Simple DirectMedia Layer (iOS xcframework headers)
 Version: 2.32.10
-Cflags: -I\${includedir}
+Cflags: -I\${includedir} -I$SDL_HEADERS
 Libs:
 EOF
 
