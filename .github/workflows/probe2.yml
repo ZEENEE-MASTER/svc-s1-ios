@@ -1,0 +1,114 @@
+# Probe2: raw UIKit delegate (proven) + SDL_Init + SDL window + GLES.
+// Answers: is SDL2/EAGL alive on this OS, or is SDL the launch killer?
+name: probe2
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe2-ipa:
+    runs-on: macos-15
+    steps:
+      - name: Build SDL probe app
+        run: |
+          set -euo pipefail
+          SDKROOT="$(xcrun --sdk iphoneos --show-sdk-path)"
+          git clone --depth 1 --branch release-2.32.10 https://github.com/libsdl-org/SDL.git sdl
+          xcodebuild -project sdl/Xcode/SDL/SDL.xcodeproj -target xcFramework-iOS -configuration Release
+          XCF="$(find sdl -name 'SDL2.xcframework' -maxdepth 5 | head -1)"
+          SLICE="$(find "$XCF" -name SDL2.framework -path '*ios-arm64*' | head -1)"
+          test -n "$SLICE"
+          HDR="$SLICE/Headers"
+          ls "$HDR/SDL.h" "$HDR/SDL_config.h"
+          mkdir -p probe2 Payload/Probe2App.app/Frameworks
+          cp -R "$SLICE" Payload/Probe2App.app/Frameworks/
+          cat > probe2/main.m <<'EOF'
+          #define SDL_MAIN_HANDLED
+          #import <UIKit/UIKit.h>
+          #import <OpenGLES/ES3/gl.h>
+          #include <SDL2/SDL.h>
+          static UILabel *gL; static SDL_Window *gW; static int gFrames;
+          @interface D : UIResponder <UIApplicationDelegate>
+          @property (strong, nonatomic) UIWindow *window;
+          @end
+          @implementation D
+          - (void)tick:(NSTimer *)t {
+            (void)t; gFrames++;
+            if (gW) {
+              GLfloat rc = ((gFrames % 120) < 60) ? 1.0f : 0.0f;
+              glClearColor(rc, 0.0f, 0.0f, 1.0f);
+              glClear(GL_COLOR_BUFFER_BIT);
+              SDL_GL_SwapWindow(gW);
+            }
+          }
+          - (BOOL)application:(UIApplication *)a didFinishLaunchingWithOptions:(NSDictionary *)o {
+            (void)a; (void)o;
+            self.window = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+            UIViewController *vc = [[UIViewController alloc] init];
+            vc.view.backgroundColor = [UIColor blackColor];
+            gL = [[UILabel alloc] initWithFrame:vc.view.bounds];
+            gL.numberOfLines = 0; gL.textColor = [UIColor whiteColor];
+            gL.font = [UIFont monospacedSystemFontOfSize:13 weight:UIFontWeightRegular];
+            [vc.view addSubview:gL];
+            self.window.rootViewController = vc;
+            [self.window makeKeyAndVisible];
+            NSMutableString *rep = [NSMutableString stringWithString:@"SDL PROBE2\n"];
+            int rc = SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER);
+            [rep appendFormat:@"SDL_Init: %d (%s)\n", rc, rc == 0 ? "OK" : SDL_GetError()];
+            if (rc == 0) {
+              SDL_version v; SDL_GetVersion(&v);
+              [rep appendFormat:@"SDL version: %d.%d.%d\n", v.major, v.minor, v.patch];
+              SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+              SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+              SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+              gW = SDL_CreateWindow("probe2", 0, 0, 64, 64,
+                                    SDL_WINDOW_OPENGL | SDL_WINDOW_HIDDEN);
+              [rep appendFormat:@"CreateWindow: %s\n", gW ? "OK" : SDL_GetError()];
+              if (gW) {
+                SDL_GLContext ctx = SDL_GL_CreateContext(gW);
+                [rep appendFormat:@"GL context: %s\n", ctx ? "OK" : SDL_GetError()];
+                if (ctx) {
+                  const char *glver = (const char *)glGetString(GL_VERSION);
+                  [rep appendFormat:@"GL_VERSION: %s\n", glver ? glver : "(null)"];
+                }
+              }
+            }
+            gL.text = rep;
+            [NSTimer scheduledTimerWithTimeInterval:0.5 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
+            return YES;
+          }
+          @end
+          int main(int argc, char *argv[]) {
+            @autoreleasepool {
+              return UIApplicationMain(argc, argv, nil, NSStringFromClass([D class]));
+            }
+          }
+          EOF
+          xcrun clang -arch arm64 -miphoneos-version-min=17.0 \
+            -isysroot "$SDKROOT" -I"$HDR" -F"$(dirname "$SLICE")" \
+            -framework UIKit -framework Foundation -framework SDL2 -framework OpenGLES \
+            -Wl,-rpath,@executable_path/Frameworks \
+            -o Payload/Probe2App.app/Probe2 probe2/main.m
+          cat > Payload/Probe2App.app/Info.plist <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+          	<key>CFBundleExecutable</key><string>Probe2</string>
+          	<key>CFBundleIdentifier</key><string>com.zeenee.svc-probe2</string>
+          	<key>CFBundleName</key><string>Probe2</string>
+          	<key>CFBundlePackageType</key><string>APPL</string>
+          	<key>CFBundleShortVersionString</key><string>1.0</string>
+          	<key>CFBundleVersion</key><string>1</string>
+          	<key>LSRequiresIPhoneOS</key><true/>
+          	<key>MinimumOSVersion</key><string>17.0</string>
+          	<key>UILaunchScreen</key><dict/>
+          	<key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
+          </dict>
+          </plist>
+          EOF
+          zip -r Probe2.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Probe2-ipa
+          path: Probe2.ipa
