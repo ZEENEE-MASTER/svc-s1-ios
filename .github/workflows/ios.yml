@@ -38,8 +38,11 @@ jobs:
           xcodebuild -project sdl/Xcode/SDL/SDL.xcodeproj -target xcFramework-iOS -configuration Release
           XCF="$(find sdl -name 'SDL2.xcframework' -maxdepth 5 | head -1)"
           test -n "$XCF"
-          echo "XCF_HEADERS=$XCF/ios-arm64/Headers" >> "$GITHUB_ENV"
-          ls "$XCF/ios-arm64/Headers/SDL_config.h"
+          ls "$XCF"
+          HDR="$(find "$XCF" -name SDL_config.h | head -1 | xargs dirname)"
+          test -n "$HDR"
+          echo "XCF_HEADERS=$HDR" >> "$GITHUB_ENV"
+          ls "$HDR/SDL.h"
       - name: Native deps (libvpx + FFmpeg + libxmp, static)
         run: |
           set -euo pipefail
