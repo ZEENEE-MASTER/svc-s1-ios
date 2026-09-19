@@ -57,7 +57,7 @@ jobs:
           export CXX="${CC}++"
           SDKROOT="$(xcrun --sdk iphoneos --show-sdk-path)"
           export PKG_CONFIG_PATH="$GITHUB_WORKSPACE/ios-deps/lib/pkgconfig"
-          export CGO_CFLAGS="-isysroot $SDKROOT -miphoneos-version-min=${MIN_IOS} -arch arm64 -I$GITHUB_WORKSPACE/ios-deps/include"
+          export CGO_CFLAGS="-isysroot $SDKROOT -miphoneos-version-min=${MIN_IOS} -arch arm64 -I$GITHUB_WORKSPACE/ios-deps/include -I$GITHUB_WORKSPACE/ios-deps/include/SDL2 -I$XCF_HEADERS"
           export CGO_LDFLAGS="-isysroot $SDKROOT -miphoneos-version-min=${MIN_IOS} -arch arm64 -L$GITHUB_WORKSPACE/ios-deps/lib"
           go mod download
           go build -buildmode=c-archive -trimpath \
