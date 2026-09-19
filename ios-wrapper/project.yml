@@ -29,6 +29,14 @@ targets:
         OTHER_LDFLAGS: [
           "$(inherited)",
           "-force_load", "$(SRCROOT)/third-party/libsvcengine.a",
+          "$(SRCROOT)/third-party/libavformat.a",
+          "$(SRCROOT)/third-party/libavcodec.a",
+          "$(SRCROOT)/third-party/libavutil.a",
+          "$(SRCROOT)/third-party/libswscale.a",
+          "$(SRCROOT)/third-party/libswresample.a",
+          "$(SRCROOT)/third-party/libavfilter.a",
+          "$(SRCROOT)/third-party/libvpx.a",
+          "$(SRCROOT)/third-party/libxmp.a",
           "-lz", "-lbz2", "-liconv",
           "-framework", "AVFoundation",
           "-framework", "AudioToolbox",
@@ -40,14 +48,5 @@ targets:
     dependencies:
       - framework: third-party/SDL2.xcframework
         embed: true
-    libraries:
-      - third-party/libavformat.a
-      - third-party/libavcodec.a
-      - third-party/libavutil.a
-      - third-party/libswscale.a
-      - third-party/libswresample.a
-      - third-party/libavfilter.a
-      - third-party/libvpx.a
-      - third-party/libxmp.a
     resources:
       - SVCiOS/Resources
