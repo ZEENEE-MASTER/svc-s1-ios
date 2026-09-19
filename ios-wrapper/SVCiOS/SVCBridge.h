@@ -3,9 +3,15 @@
 #ifndef SVCBridge_h
 #define SVCBridge_h
 
-// Pass the app Documents directory. Call once at launch, before the SDL
-// main thread enters SDL_main. Buffered channel: early call is safe.
+// Pass the app Documents directory. Called when the payload is ready
+// (maybe minutes after launch — Files-app drop). Buffered channel in the
+// engine: early or late calls are safe.
 void SVCSetBaseDir(const char *path);
+
+// Boot sequence (ObjC, main.m): overlay UI, stderr capture, payload
+// install, readiness polling. Called by Go SDL_main (SDL's own app
+// delegate means no custom AppDelegate of ours would ever fire).
+void SVCBootSequence(void);
 
 // Go-owned SDL entry point (exported from the engine static library).
 // Referenced by main.m's call to SDL_UIKitRunApp — do NOT define SDL_main

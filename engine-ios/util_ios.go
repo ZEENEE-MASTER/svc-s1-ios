@@ -16,6 +16,10 @@ package main
 #include <stdio.h>
 #include "SDL.h"
 
+// Implemented in the ObjC shell (main.m). SDL installs its own app
+// delegate, so boot starts here at SDL_main, not in didFinishLaunching.
+void SVCBootSequence(void);
+
 // Runs at library load, BEFORE the Go runtime starts.
 __attribute__((constructor))
 static void svc_prepare_go_runtime() {
@@ -96,7 +100,9 @@ func ShowErrorDialog(message string) {
 //export SDL_main
 func SDL_main(argc C.int, argv **C.char) C.int {
 	runtime.LockOSThread()
-	// Wait for ObjC to hand us the Documents path (buffered: early call is fine).
+	// Boot UI + payload install (async). Returns immediately.
+	C.SVCBootSequence()
+	// Wait for ObjC to hand us a bootable Documents path.
 	<-extractionDone
 	Logcat("SDL_main: baseDir ready, entering realMain")
 	sys.baseDir = baseDir
