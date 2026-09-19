@@ -61,7 +61,8 @@ jobs:
           </dict>
           </plist>
           EOF
-          cd Payload && zip -r ../Probe.ipa ProbeApp.app && cd ..
+          # IPA spec: top-level Payload/ directory (a bare .app at root is rejected).
+          zip -r Probe.ipa Payload
       - uses: actions/upload-artifact@v4
         with:
           name: Probe-ipa
