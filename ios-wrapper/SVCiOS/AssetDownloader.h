@@ -7,6 +7,10 @@
 // Ensures the bundled/lite payload exists; downloads missing packs.
 // Completion runs on the main queue.
 + (void)ensurePayloadWithCompletion:(void (^)(BOOL ready, NSString *note))completion;
+// Synchronous first-launch install with progress. Returns YES when
+// Documents/ holds a bootable payload. Progress block may run off-main.
++ (BOOL)installPayloadWithProgress:(void (^)(NSUInteger current, NSUInteger total, NSString *entry))progress
+                              note:(NSString **)note;
 // Installs one CDN pack zip into its engine-relative location:
 //   payload-lite.zip -> Documents/ ; chars-<X>.zip -> Documents/chars/<X>/
 //   stages-full.zip -> Documents/stages/ ; data-full.zip -> Documents/data/

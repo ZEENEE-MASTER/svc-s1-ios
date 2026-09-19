@@ -2,6 +2,12 @@
 #import "vendor/miniz/miniz.h"
 #import "vendor/miniz/miniz_zip.h"
 
+@interface AssetDownloader ()
++ (BOOL)unzipFile:(NSString *)zipPath
+            toDir:(NSString *)dir
+         progress:(void (^)(NSUInteger current, NSUInteger total, NSString *entry))progress;
+@end
+
 @implementation AssetDownloader
 
 + (NSString *)documentsDir {
@@ -57,7 +63,40 @@
   return [self unzipFile:zipPath toDir:target];
 }
 
++ (BOOL)installPayloadWithProgress:(void (^)(NSUInteger, NSUInteger, NSString *))progress
+                              note:(NSString **)note {
+  if ([self payloadPresent]) {
+    if (note)
+      *note = @"present";
+    return YES;
+  }
+  NSString *bundled = [[NSBundle mainBundle] pathForResource:@"payload-lite"
+                                                      ofType:@"zip"];
+  if (bundled) {
+    BOOL ok = [self unzipFile:bundled
+                        toDir:[self documentsDir]
+                     progress:progress];
+    if (ok && [self payloadPresent]) {
+      if (note)
+        *note = @"bundled lite installed";
+      return YES;
+    }
+    if (note)
+      *note = @"bundled zip present but payload incomplete after unzip";
+    return NO;
+  }
+  if (note)
+    *note = @"no payload in Documents and none bundled";
+  return NO;
+}
+
 + (BOOL)unzipFile:(NSString *)zipPath toDir:(NSString *)dir {
+  return [self unzipFile:zipPath toDir:dir progress:nil];
+}
+
++ (BOOL)unzipFile:(NSString *)zipPath
+            toDir:(NSString *)dir
+         progress:(void (^)(NSUInteger, NSUInteger, NSString *))progress {
   mz_zip_archive zip;
   memset(&zip, 0, sizeof(zip));
   if (!mz_zip_reader_init_file(&zip, [zipPath UTF8String], 0))
@@ -65,6 +104,13 @@
   BOOL ok = YES;
   mz_uint count = mz_zip_reader_get_num_files(&zip);
   for (mz_uint i = 0; i < count && ok; i++) {
+    if (progress && (i % 25 == 0 || i + 1 == count)) {
+      mz_zip_archive_file_stat pst;
+      NSString *pname = @"";
+      if (mz_zip_reader_file_stat(&zip, i, &pst))
+        pname = @(pst.m_filename);
+      progress(i + 1, count, pname);
+    }
     mz_zip_archive_file_stat st;
     if (!mz_zip_reader_file_stat(&zip, i, &st)) {
       ok = NO;
