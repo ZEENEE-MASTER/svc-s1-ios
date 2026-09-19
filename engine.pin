@@ -1,0 +1,8 @@
+# Pinned upstream refs (bump deliberately, CI uses these)
+ENGINE_REPO=https://github.com/ikemen-engine/Ikemen-GO.git
+ENGINE_REF=v1.0.0
+GO_VERSION=1.27.0
+XCODE_RUNNER=macos-15
+MIN_IOS=17.0
+BUNDLE_ID=com.zeenee.svc-s1
+APP_NAME=SVC S1

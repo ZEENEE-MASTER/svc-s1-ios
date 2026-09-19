@@ -1,0 +1,82 @@
+# Phase-0 CI: prove the toolchain on a cloud Mac, then package a smoke-test IPA.
+# Job 1 (spike-engine-ios) is EXPECTED to need iteration — FFmpeg/libxmp for
+# iOS are the known unknowns. Logs are the deliverable until it goes green.
+# Job 2 builds the ObjC shell + SDL so touch/layout work can start on-device.
+name: ios-port
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+env:
+  GO_VERSION: "1.27.0"
+  ENGINE_REPO: https://github.com/ikemen-engine/Ikemen-GO.git
+  ENGINE_REF: v1.0.0
+  MIN_IOS: "17.0"
+  BUNDLE_ID: com.zeenee.svc-s1
+
+jobs:
+  spike-engine-ios:
+    name: Spike — Go engine for iOS (GOOS=ios, gles2)
+    runs-on: macos-15
+    steps:
+      - name: Checkout engine
+        run: git clone --depth 1 --branch "$ENGINE_REF" "$ENGINE_REPO" engine
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Xcode version
+        run: xcodebuild -version; xcrun --sdk iphoneos --show-sdk-version
+      - name: gomobile init
+        working-directory: engine
+        run: |
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          gomobile init
+      - name: Compile check — engine for iOS arm64 (gles2 path)
+        working-directory: engine
+        run: |
+          export GOOS=ios GOARCH=arm64 CGO_ENABLED=1 GOEXPERIMENT=arenas
+          export CC="$(xcrun --sdk iphoneos --find clang)"
+          export CXX="${CC}++"
+          export CGO_CFLAGS="-isysroot $(xcrun --sdk iphoneos --show-sdk-path) -miphoneos-version-min=${MIN_IOS} -arch arm64"
+          export CGO_LDFLAGS="$CGO_CFLAGS"
+          go build -tags=gles2 -o /tmp/svc-engine-check.a ./src 2>&1 | tee /tmp/ios-spike.log
+          echo "--- SPIKE LOG (tail) ---"; tail -50 /tmp/ios-spike.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-spike-log
+          path: /tmp/ios-spike.log
+
+  shell-ipa:
+    name: Wrapper shell IPA (unsigned, smoke test)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build SDL2 xcframework
+        run: |
+          git clone --depth 1 --branch release-2.30.x https://github.com/libsdl-org/SDL.git sdl
+          xcodebuild -project sdl/Xcode/SDL/SDL.xcodeproj -target SDL2.xcframework -configuration Release
+          ls sdl/Xcode/SDL/*.xcframework
+      - name: Generate Xcode project
+        run: |
+          brew install xcodegen
+          cd ios-wrapper && xcodegen generate
+      - name: Build unsigned app
+        run: |
+          cd ios-wrapper
+          xcodebuild -project SVC_S1.xcodeproj -scheme SVC_S1 -configuration Release \
+            -sdk iphoneos -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY=""
+      - name: Package unsigned IPA
+        run: |
+          cd ios-wrapper
+          mkdir -p Payload && cp -R "build/Build/Products/Release-iphoneos/SVC_S1.app" Payload/
+          zip -r S1-shell-unsigned.ipa Payload
+          shasum -a 256 S1-shell-unsigned.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: S1-shell-unsigned-ipa
+          path: ios-wrapper/S1-shell-unsigned.ipa

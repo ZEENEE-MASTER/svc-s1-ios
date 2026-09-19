@@ -1,0 +1,31 @@
+# xcodegen spec — CI installs xcodegen and generates SVC_S1.xcodeproj.
+# No storyboards/XIBs/asset catalogs: UI is programmatic, resources raw.
+name: SVC_S1
+options:
+  bundleIdPrefix: com.zeenee
+  deploymentTarget:
+    iOS: "17.0"
+targets:
+  SVC_S1:
+    type: application
+    platform: iOS
+    sources:
+      - path: SVCiOS
+        excludes:
+          - "Info.plist"
+    info:
+      path: SVCiOS/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.zeenee.svc-s1
+        PRODUCT_NAME: SVC_S1
+        INFOPLIST_FILE: SVCiOS/Info.plist
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGN_IDENTITY: ""
+        ENABLE_BITCODE: "NO"
+        OTHER_LDFLAGS: ["-weak_framework", "GameController"]
+    dependencies:
+      # Phase 1: SDL2.xcframework built on-runner (libsdl-org/SDL tag pinned in CI).
+      # - framework: ../third-party/SDL2.xcframework
+      # Phase 1b: engine xcframework from gomobile bind.
+      # - framework: ../third-party/SVCEngine.xcframework
