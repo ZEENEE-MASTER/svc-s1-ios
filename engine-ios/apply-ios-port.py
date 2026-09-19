@@ -42,6 +42,9 @@ def main() -> None:
     patch(src / "font_vk.go", "//go:build !kinc && !android", "//go:build !kinc && !android && !ios")
     patch(src / "render_vk.go", "//go:build !kinc && !android", "//go:build !kinc && !android && !ios")
     patch(src / "util_desktop.go", "//go:build !raw && !android", "//go:build !raw && !android && !ios")
+    # GOOS=ios also satisfies the `darwin` build tag: keep darwin-only
+    # helpers (osPreferredLanguage via /usr/bin/defaults) off iOS.
+    patch(src / "util_darwin.go", "//go:build darwin", "//go:build darwin && !ios")
 
     patch(src / "render_gles32.go",
           'if runtime.GOOS != "android" {',
