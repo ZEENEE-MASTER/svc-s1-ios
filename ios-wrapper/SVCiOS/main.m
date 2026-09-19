@@ -3,6 +3,9 @@
 // calls SDL_UIKitRunApp. SDL_main itself is OWNED BY THE GO ENGINE
 // (svc-engine-ios src/util_ios.go, //export SDL_main) — mirroring how
 // ikemen-droid's libmain.so owns SDL_main on Android.
+// SDL_MAIN_HANDLED: our main() must stay main. SDL_main is owned by the
+// Go engine (svc-engine-ios); the shell links weak stubs (engine-stub.c).
+#define SDL_MAIN_HANDLED
 #import <UIKit/UIKit.h>
 #include <SDL2/SDL.h>
 #import "SVCBridge.h"
