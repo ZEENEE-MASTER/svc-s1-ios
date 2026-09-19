@@ -25,9 +25,11 @@ targets:
         CODE_SIGNING_ALLOWED: "NO"
         CODE_SIGN_IDENTITY: ""
         ENABLE_BITCODE: "NO"
+        FRAMEWORK_SEARCH_PATHS: ["$(inherited)", "$(SRCROOT)/third-party/**"]
         OTHER_LDFLAGS: ["-weak_framework", "GameController"]
     dependencies:
-      # Phase 1: SDL2.xcframework built on-runner (libsdl-org/SDL tag pinned in CI).
-      # - framework: ../third-party/SDL2.xcframework
+      - framework: third-party/SDL2.xcframework
+        embed: true
       # Phase 1b: engine xcframework from gomobile bind.
-      # - framework: ../third-party/SVCEngine.xcframework
+      # - framework: third-party/SVCEngine.xcframework
+      #   embed: true

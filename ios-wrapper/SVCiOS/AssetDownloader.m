@@ -1,6 +1,6 @@
 #import "AssetDownloader.h"
-#import "miniz/miniz.h"
-#import "miniz/miniz_zip.h"
+#import "vendor/miniz/miniz.h"
+#import "vendor/miniz/miniz_zip.h"
 
 @implementation AssetDownloader
 

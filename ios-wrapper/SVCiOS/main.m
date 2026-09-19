@@ -4,7 +4,7 @@
 // (svc-engine-ios src/util_ios.go, //export SDL_main) — mirroring how
 // ikemen-droid's libmain.so owns SDL_main on Android.
 #import <UIKit/UIKit.h>
-#include "SDL.h"
+#include <SDL2/SDL.h>
 #import "SVCBridge.h"
 #import "GamepadView.h"
 #import "AssetDownloader.h"
