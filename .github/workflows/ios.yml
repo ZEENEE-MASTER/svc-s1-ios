@@ -74,9 +74,10 @@ jobs:
           else
             echo "no xcframework in dmg; building from source tag"
             git clone --depth 1 --branch release-2.32.10 https://github.com/libsdl-org/SDL.git sdl
-            xcodebuild -list -project sdl/Xcode/SDL/SDL.xcodeproj
-            xcodebuild -project sdl/Xcode/SDL/SDL.xcodeproj -target SDL2.xcframework -configuration Release
-            cp -R sdl/Xcode/SDL/SDL2.xcframework ios-wrapper/third-party/
+            xcodebuild -project sdl/Xcode/SDL/SDL.xcodeproj -target xcFramework-iOS -configuration Release
+            XCF="$(find sdl -name 'SDL2.xcframework' -maxdepth 5 | head -1)"
+            test -n "$XCF"
+            cp -R "$XCF" ios-wrapper/third-party/
           fi
           hdiutil detach "$VOL" -quiet || true
           ls ios-wrapper/third-party/
