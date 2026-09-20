@@ -1,0 +1,99 @@
+# Probe3: the EXACT SDL_UIKitRunApp bootstrap the game uses, minus the engine.
+// SDL_main writes stage markers to Documents/stage.txt (File Sharing),
+// shows a magenta window 300 frames, exits. Outcomes:
+//   magenta + close + full stage file -> UIKitRunApp path FINE, crash is engine-side
+//   black/crash + partial stage file  -> failing stage named in the file
+//   black + NO Files folder           -> dies before SDL_main (SDL launch path)
+name: probe3
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe3-ipa:
+    runs-on: macos-15
+    steps:
+      - name: Build UIKitRunApp probe
+        run: |
+          set -euo pipefail
+          SDKROOT="$(xcrun --sdk iphoneos --show-sdk-path)"
+          git clone --depth 1 --branch release-2.32.10 https://github.com/libsdl-org/SDL.git sdl
+          xcodebuild -project sdl/Xcode/SDL/SDL.xcodeproj -target xcFramework-iOS -configuration Release
+          XCF="$(find sdl -name 'SDL2.xcframework' -maxdepth 5 | head -1)"
+          SLICE="$(find "$XCF" -name SDL2.framework | grep -v -i simulator | head -1)"
+          HDR="$SLICE/Headers"
+          mkdir -p probe3 Payload/Probe3App.app/Frameworks
+          cp -R "$SLICE" Payload/Probe3App.app/Frameworks/
+          cat > probe3/main.m <<'EOF'
+          #define SDL_MAIN_HANDLED
+          #import <UIKit/UIKit.h>
+          #include <SDL2/SDL.h>
+          static void stage(NSString *s) {
+            NSArray *p = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+            NSString *f = [[p firstObject] stringByAppendingPathComponent:@"stage.txt"];
+            NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:f];
+            if (!h) { [[NSFileManager defaultManager] createFileAtPath:f contents:nil attributes:nil];
+                      h = [NSFileHandle fileHandleForWritingAtPath:f]; }
+            [h seekToEndOfFile];
+            [h writeData:[[s stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding]];
+            [h closeFile];
+            NSLog(@"[probe3] %@", s);
+          }
+          int SDL_main(int argc, char *argv[]) {
+            (void)argc; (void)argv;
+            stage(@"SDL_main entered");
+            if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS | SDL_INIT_TIMER) != 0) {
+              stage([NSString stringWithFormat:@"SDL_Init FAIL: %s", SDL_GetError()]);
+              return 1;
+            }
+            stage(@"SDL_Init ok");
+            SDL_Window *w = SDL_CreateWindow("probe3", 0, 0, 200, 200, SDL_WINDOW_SHOWN);
+            if (!w) { stage([NSString stringWithFormat:@"window FAIL: %s", SDL_GetError()]); return 1; }
+            stage(@"window ok");
+            SDL_Renderer *r = SDL_CreateRenderer(w, -1, SDL_RENDERER_SOFTWARE);
+            if (!r) { stage([NSString stringWithFormat:@"renderer FAIL: %s", SDL_GetError()]); return 1; }
+            stage(@"renderer ok, drawing 300 frames");
+            for (int i = 0; i < 300; i++) {
+              SDL_SetRenderDrawColor(r, 255, 0, 255, 255);
+              SDL_RenderClear(r);
+              SDL_RenderPresent(r);
+              SDL_Delay(16);
+            }
+            stage(@"done, exiting");
+            exit(0);
+            return 0;
+          }
+          int main(int argc, char *argv[]) {
+            @autoreleasepool { return SDL_UIKitRunApp(argc, argv, SDL_main); }
+          }
+          EOF
+          xcrun clang -arch arm64 -miphoneos-version-min=17.0 \
+            -isysroot "$SDKROOT" -I"$HDR" -F"$(dirname "$SLICE")" \
+            -framework UIKit -framework Foundation -framework SDL2 \
+            -Wl,-rpath,@executable_path/Frameworks \
+            -o Payload/Probe3App.app/Probe3 probe3/main.m
+          cat > Payload/Probe3App.app/Info.plist <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+          	<key>CFBundleExecutable</key><string>Probe3</string>
+          	<key>CFBundleIdentifier</key><string>com.zeenee.svc-probe3</string>
+          	<key>CFBundleName</key><string>Probe3</string>
+          	<key>CFBundlePackageType</key><string>APPL</string>
+          	<key>CFBundleShortVersionString</key><string>1.0</string>
+          	<key>CFBundleVersion</key><string>1</string>
+          	<key>LSRequiresIPhoneOS</key><true/>
+          	<key>MinimumOSVersion</key><string>17.0</string>
+          	<key>UILaunchScreen</key><dict/>
+          	<key>UIFileSharingEnabled</key><true/>
+          	<key>LSSupportsOpeningDocumentsInPlace</key><true/>
+          	<key>UIRequiredDeviceCapabilities</key><array><string>arm64</string></array>
+          </dict>
+          </plist>
+          EOF
+          zip -r Probe3.ipa Payload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Probe3-ipa
+          path: Probe3.ipa
