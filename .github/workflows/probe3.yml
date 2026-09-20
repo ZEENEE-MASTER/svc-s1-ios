@@ -1,9 +1,9 @@
 # Probe3: the EXACT SDL_UIKitRunApp bootstrap the game uses, minus the engine.
-// SDL_main writes stage markers to Documents/stage.txt (File Sharing),
-// shows a magenta window 300 frames, exits. Outcomes:
-//   magenta + close + full stage file -> UIKitRunApp path FINE, crash is engine-side
-//   black/crash + partial stage file  -> failing stage named in the file
-//   black + NO Files folder           -> dies before SDL_main (SDL launch path)
+# SDL_main writes stage markers to Documents/stage.txt (File Sharing),
+# shows a magenta window 300 frames, exits. Outcomes:
+#   magenta + close + full stage file -> UIKitRunApp path FINE, crash is engine-side
+#   black/crash + partial stage file  -> failing stage named in the file
+#   black + NO Files folder           -> dies before SDL_main (SDL launch path)
 name: probe3
 
 on:
