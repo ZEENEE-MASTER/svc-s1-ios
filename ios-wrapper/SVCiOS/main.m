@@ -100,6 +100,10 @@
     didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
   (void)application;
   (void)launchOptions;
+  // SDL_MAIN_HANDLED is defined (our main must stay main), so SDL requires
+  // this handshake before SDL_Init or init fails with "Application didn't
+  // initialize properly". SDL_UIKitRunApp does it internally; we do it here.
+  SDL_SetMainReady();
   NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
                                                        NSUserDomainMask, YES);
   _docs = [paths firstObject];
