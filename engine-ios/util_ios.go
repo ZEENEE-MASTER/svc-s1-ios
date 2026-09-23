@@ -97,6 +97,26 @@ func ShowErrorDialog(message string) {
 	Logcat(fmt.Sprintf("CRITICAL ERROR: %s", message))
 }
 
+// Direct engine entry for the manual bootstrap (raw UIApplicationMain +
+// our own delegate; SDL_UIKitRunApp is not used). Call ONCE on the main
+// thread; blocks inside the engine's game loop (which pumps SDL events
+// every frame, keeping the runloop/watchdog satisfied).
+//
+//export SVCStart
+func SVCStart(cBaseDir *C.char) {
+	runtime.LockOSThread()
+	if cBaseDir != nil {
+		baseDir = C.GoString(cBaseDir)
+	}
+	select {
+	case extractionDone <- true:
+	default:
+	}
+	Logcat("SVCStart: baseDir=" + baseDir)
+	sys.baseDir = baseDir
+	realMain()
+}
+
 //export SDL_main
 func SDL_main(argc C.int, argv **C.char) C.int {
 	runtime.LockOSThread()

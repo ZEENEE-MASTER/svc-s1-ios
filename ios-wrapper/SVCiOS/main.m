@@ -1,10 +1,10 @@
 // SVC S1 — iOS entry point. Programmatic UIKit, no storyboards/XIBs.
 //
-// CRITICAL: SDL_UIKitRunApp installs SDL's OWN UIApplicationDelegate.
-// A custom AppDelegate in this file would NEVER fire, so ALL boot logic
-// lives in SVCBootSequence(), called by the Go engine as the first act of
-// SDL_main (svc-engine-ios src/util_ios.go). Do not move boot work into an
-// AppDelegate: the engine would wait on its start channel forever (black).
+// Bootstrap is MANUAL: raw UIApplicationMain with our own delegate
+// (SDL_UIKitRunApp proved fatal on this device generation — black hang,
+// SDL_main never reached). The engine starts via Go SVCStart(), called on
+// the main thread once the payload is ready; it pumps SDL events every
+// frame, keeping the runloop/watchdog satisfied.
 //
 // All wrapper UI lives in padWindow (above SDL's opaque window): boot
 // status, live engine-log tail, and the touch gamepad.
@@ -15,23 +15,29 @@
 #import "GamepadView.h"
 #import "AssetDownloader.h"
 
-static UIWindow *gPadWindow;
-static UILabel *gStatusLabel;
-static UITextView *gLogView;
-static NSString *gDocs;
-static NSString *gLogPath;
-static BOOL gEngineSignaled;
+@interface SVCAppDelegate : UIResponder <UIApplicationDelegate>
+@property (strong, nonatomic) UIWindow *window;
+@end
 
-static void SVCSetStatus(NSString *msg) {
+@implementation SVCAppDelegate {
+  UIWindow *_padWindow;
+  UILabel *_statusLabel;
+  UITextView *_logView;
+  NSString *_docs;
+  NSString *_logPath;
+  BOOL _engineStarted;
+}
+
+- (void)setStatus:(NSString *)msg {
   NSLog(@"[SVC-S1] %@", msg);
   dispatch_async(dispatch_get_main_queue(), ^{
-    gStatusLabel.text = msg;
+    self->_statusLabel.text = msg;
   });
 }
 
 // Mirror the last lines of the boot log onto the overlay.
-static void SVCRefreshLog(void) {
-  NSData *d = [NSData dataWithContentsOfFile:gLogPath];
+- (void)refreshLogView {
+  NSData *d = [NSData dataWithContentsOfFile:self->_logPath];
   if (!d.length)
     return;
   NSString *all = [[NSString alloc] initWithData:d
@@ -44,108 +50,119 @@ static void SVCRefreshLog(void) {
   NSString *tail = [[lines subarrayWithRange:NSMakeRange(from, n - from)]
       componentsJoinedByString:@"\n"];
   dispatch_async(dispatch_get_main_queue(), ^{
-    gLogView.text = tail;
+    self->_logView.text = tail;
   });
 }
 
-// One install attempt. Signals the engine exactly once, when bootable.
-static void SVCTryInstall(void) {
+// Payload ready -> start the engine ONCE, on the main thread.
+- (void)startEngine {
+  if (self->_engineStarted)
+    return;
+  self->_engineStarted = YES;
+  [self setStatus:@"Entering the ring…"];
+  SVCGamepadView *pad = [[SVCGamepadView alloc]
+      initWithFrame:self->_padWindow.bounds];
+  pad.autoresizingMask =
+      UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+  [self->_padWindow.rootViewController.view addSubview:pad];
+  // Blocks inside the engine's game loop (pumps SDL events per frame).
+  SVCStart([self->_docs UTF8String]);
+}
+
+// One install attempt; engine starts the moment bootable.
+- (void)tryInstall {
   __block BOOL ok = NO;
   __block NSString *note = @"";
   ok = [AssetDownloader installPayloadWithProgress:^(NSUInteger cur, NSUInteger total, NSString *name) {
-    SVCSetStatus([NSString stringWithFormat:@"Installing fight data…\n%@\n%lu / %lu",
-                                            name, (unsigned long)cur,
-                                            (unsigned long)total]);
+    [self setStatus:[NSString stringWithFormat:@"Installing fight data…\n%@\n%lu / %lu",
+                                               name, (unsigned long)cur,
+                                               (unsigned long)total]];
   }
       note:&note];
-  SVCRefreshLog();
-  if (ok && !gEngineSignaled) {
-    gEngineSignaled = YES;
-    SVCSetBaseDir([gDocs UTF8String]);
-    SVCSetStatus(@"Entering the ring…");
-    SVCGamepadView *pad = [[SVCGamepadView alloc]
-        initWithFrame:gPadWindow.bounds];
-    pad.autoresizingMask =
-        UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [gPadWindow.rootViewController.view addSubview:pad];
-    });
-  } else if (!ok) {
-    SVCSetStatus([NSString stringWithFormat:@"Waiting for fight data…\n%@\n"
-                  @"Drop payload-lite.zip in Files → SVC S1, no relaunch needed.",
-                  note]);
+  [self refreshLogView];
+  if (ok) {
+    // Engine must start on the main thread (UIKit confinement).
+    if ([NSThread isMainThread]) {
+      [self startEngine];
+    } else {
+      dispatch_sync(dispatch_get_main_queue(), ^{
+        [self startEngine];
+      });
+    }
+  } else {
+    [self setStatus:[NSString stringWithFormat:@"Waiting for fight data…\n%@\n"
+                     @"Drop payload-lite.zip in Files → SVC S1, no relaunch needed.",
+                     note]];
   }
 }
 
-// Called by Go SDL_main on the main thread. Returns immediately; the engine
-// waits on its start channel until SVCTryInstall signals readiness.
-void SVCBootSequence(void) {
-  static BOOL booted = NO;
-  if (booted)
-    return;
-  booted = YES;
-
+- (BOOL)application:(UIApplication *)application
+    didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+  (void)application;
+  (void)launchOptions;
   NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
                                                        NSUserDomainMask, YES);
-  gDocs = [paths firstObject];
-  gLogPath = [gDocs stringByAppendingPathComponent:@"svc-boot.log"];
+  _docs = [paths firstObject];
+  _logPath = [_docs stringByAppendingPathComponent:@"svc-boot.log"];
 
   NSString *prevTail = @"";
-  NSData *prev = [NSData dataWithContentsOfFile:gLogPath];
+  NSData *prev = [NSData dataWithContentsOfFile:_logPath];
   if (prev.length > 64) {
     NSString *all = [[NSString alloc] initWithData:prev encoding:NSUTF8StringEncoding];
     NSArray *lines = [all componentsSeparatedByString:@"\n"];
     NSUInteger n = lines.count, from = n > 12 ? n - 12 : 0;
     prevTail = [[lines subarrayWithRange:NSMakeRange(from, n - from)] componentsJoinedByString:@"\n"];
   }
-  freopen([gLogPath UTF8String], "w", stderr);
-  NSLog(@"[SVC-S1] launch: SVC S1 iOS boot (via SDL_main)");
+  freopen([_logPath UTF8String], "w", stderr);
+  NSLog(@"[SVC-S1] launch: manual bootstrap");
   if (prevTail.length)
     NSLog(@"[SVC-S1] previous run tail:\n%@", prevTail);
 
-  gPadWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
-  gPadWindow.windowLevel = UIWindowLevelStatusBar + 1.0;
-  gPadWindow.rootViewController = [[UIViewController alloc] init];
-  gPadWindow.rootViewController.view.backgroundColor = [UIColor clearColor];
+  _padWindow = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+  _padWindow.windowLevel = UIWindowLevelStatusBar + 1.0;
+  _padWindow.rootViewController = [[UIViewController alloc] init];
+  _padWindow.rootViewController.view.backgroundColor = [UIColor clearColor];
 
-  CGRect b = gPadWindow.bounds;
-  gStatusLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 44, b.size.width - 40, 90)];
-  gStatusLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-  gStatusLabel.textColor = [UIColor whiteColor];
-  gStatusLabel.backgroundColor = [UIColor colorWithWhite:0 alpha:0.55];
-  gStatusLabel.numberOfLines = 0;
-  gStatusLabel.textAlignment = NSTextAlignmentCenter;
-  gStatusLabel.font = [UIFont boldSystemFontOfSize:16];
-  gStatusLabel.text = @"SVC S1 starting…";
-  [gPadWindow.rootViewController.view addSubview:gStatusLabel];
+  CGRect b = _padWindow.bounds;
+  _statusLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 44, b.size.width - 40, 90)];
+  _statusLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+  _statusLabel.textColor = [UIColor whiteColor];
+  _statusLabel.backgroundColor = [UIColor colorWithWhite:0 alpha:0.55];
+  _statusLabel.numberOfLines = 0;
+  _statusLabel.textAlignment = NSTextAlignmentCenter;
+  _statusLabel.font = [UIFont boldSystemFontOfSize:16];
+  _statusLabel.text = @"SVC S1 starting…";
+  [_padWindow.rootViewController.view addSubview:_statusLabel];
 
-  gLogView = [[UITextView alloc] initWithFrame:CGRectMake(20, 140, b.size.width - 40, 190)];
-  gLogView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-  gLogView.backgroundColor = [UIColor colorWithWhite:0 alpha:0.55];
-  gLogView.textColor = [UIColor greenColor];
-  gLogView.font = [UIFont monospacedSystemFontOfSize:10 weight:UIFontWeightRegular];
-  gLogView.editable = NO;
-  gLogView.selectable = NO;
-  gLogView.userInteractionEnabled = NO;
-  [gPadWindow.rootViewController.view addSubview:gLogView];
+  _logView = [[UITextView alloc] initWithFrame:CGRectMake(20, 140, b.size.width - 40, 190)];
+  _logView.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+  _logView.backgroundColor = [UIColor colorWithWhite:0 alpha:0.55];
+  _logView.textColor = [UIColor greenColor];
+  _logView.font = [UIFont monospacedSystemFontOfSize:10 weight:UIFontWeightRegular];
+  _logView.editable = NO;
+  _logView.selectable = NO;
+  _logView.userInteractionEnabled = NO;
+  [_padWindow.rootViewController.view addSubview:_logView];
 
-  gPadWindow.hidden = NO;
-  SVCRefreshLog();
+  _padWindow.hidden = NO;
+  [self refreshLogView];
 
   // Install + Files-drop polling (payload can arrive any time).
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-    SVCTryInstall();
+    [self tryInstall];
     for (;;) {
       [NSThread sleepForTimeInterval:2.0];
-      SVCRefreshLog();
-      if (!gEngineSignaled)
-        SVCTryInstall();
+      [self refreshLogView];
+      if (!self->_engineStarted)
+        [self tryInstall];
     }
   });
+  return YES;
 }
+@end
 
 int main(int argc, char *argv[]) {
   @autoreleasepool {
-    return SDL_UIKitRunApp(argc, argv, SDL_main);
+    return UIApplicationMain(argc, argv, nil, NSStringFromClass([SVCAppDelegate class]));
   }
 }

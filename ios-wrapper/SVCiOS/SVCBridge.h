@@ -8,14 +8,13 @@
 // engine: early or late calls are safe.
 void SVCSetBaseDir(const char *path);
 
-// Boot sequence (ObjC, main.m): overlay UI, stderr capture, payload
-// install, readiness polling. Called by Go SDL_main (SDL's own app
-// delegate means no custom AppDelegate of ours would ever fire).
-void SVCBootSequence(void);
+// Direct engine entry (manual bootstrap: raw UIApplicationMain + our own
+// delegate; SDL_UIKitRunApp is not used). Call ONCE on the main thread;
+// blocks inside the engine's game loop.
+void SVCStart(const char *baseDirPath);
 
 // Go-owned SDL entry point (exported from the engine static library).
-// Referenced by main.m's call to SDL_UIKitRunApp — do NOT define SDL_main
-// in ObjC or the link will fail with a duplicate symbol.
+// Kept for compatibility; the manual bootstrap does not call it.
 int SDL_main(int argc, char *argv[]);
 
 #endif
