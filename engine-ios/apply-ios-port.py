@@ -137,6 +137,10 @@ def main() -> None:
     patch(src / "system_sdl.go",
           '\tif runtime.GOOS == "android" || runtime.GOOS == "ios" {\n\t\t// On Android, we MUST use 0,0',
           '\tif runtime.GOOS == "android" || (runtime.GOOS == "ios" && s.cfg.Video.RenderMode != "Vulkan 1.3") {\n\t\t// On Android, we MUST use 0,0')
+    # iOS is fullscreen-only (no windowed desktop): force it.
+    patch(src / "system_sdl.go",
+          '\t\t_, forceWindowed := sys.cmdFlags["-windowed"]\n\t\tfullscreen := s.cfg.Video.Fullscreen && !forceWindowed',
+          '\t\t_, forceWindowed := sys.cmdFlags["-windowed"]\n\t\tfullscreen := s.cfg.Video.Fullscreen && !forceWindowed\n\t\tif runtime.GOOS == "ios" {\n\t\t\tfullscreen = true\n\t\t}')
     for old, new in [
         ('if runtime.GOOS != "android" {\n\t\t\tmode, err := sdl.GetDesktopDisplayMode(0)',
          'if runtime.GOOS != "android" && runtime.GOOS != "ios" {\n\t\t\tmode, err := sdl.GetDesktopDisplayMode(0)'),

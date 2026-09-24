@@ -23,9 +23,11 @@
   UIWindow *_padWindow;
   UILabel *_statusLabel;
   UITextView *_logView;
+  UILabel *_padLabel;
   NSString *_docs;
   NSString *_logPath;
   BOOL _engineStarted;
+  BOOL _overlayHidden;
 }
 
 - (void)setStatus:(NSString *)msg {
@@ -65,8 +67,48 @@
   pad.autoresizingMask =
       UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
   [self->_padWindow.rootViewController.view addSubview:pad];
+  // Diagnostics hide themselves once the game is up; triple-tap anywhere
+  // brings them back.
+  UITapGestureRecognizer *triple = [[UITapGestureRecognizer alloc]
+      initWithTarget:self action:@selector(toggleOverlay)];
+  triple.numberOfTapsRequired = 3;
+  [self->_padWindow.rootViewController.view addGestureRecognizer:triple];
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(12 * NSEC_PER_SEC)),
+                 dispatch_get_main_queue(), ^{
+    [self setOverlayHidden:YES];
+  });
   // Blocks inside the engine's game loop (pumps SDL events per frame).
   SVCStart([self->_docs UTF8String]);
+}
+
+- (void)setOverlayHidden:(BOOL)hidden {
+  self->_overlayHidden = hidden;
+  self->_statusLabel.hidden = hidden;
+  self->_logView.hidden = hidden;
+  self->_padLabel.hidden = hidden;
+}
+
+- (void)toggleOverlay {
+  [self setOverlayHidden:!self->_overlayHidden];
+}
+
+// MFi / game-controller visibility straight from SDL.
+- (void)refreshPadLabel {
+  NSString *txt;
+  if (!SDL_WasInit(SDL_INIT_JOYSTICK)) {
+    txt = @"Pads: (engine starting)";
+  } else {
+    int n = SDL_NumJoysticks();
+    if (n <= 0) {
+      txt = @"Pads: none — connect an MFi controller";
+    } else {
+      const char *nm = SDL_JoystickNameForIndex(0);
+      txt = [NSString stringWithFormat:@"Pads: %d (%s)", n, nm ? nm : "?"];
+    }
+  }
+  dispatch_async(dispatch_get_main_queue(), ^{
+    self->_padLabel.text = txt;
+  });
 }
 
 // One install attempt; engine starts the moment bootable.
@@ -148,8 +190,18 @@
   _logView.userInteractionEnabled = NO;
   [_padWindow.rootViewController.view addSubview:_logView];
 
+  _padLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, b.size.height - 64, b.size.width - 40, 24)];
+  _padLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
+  _padLabel.textColor = [UIColor yellowColor];
+  _padLabel.backgroundColor = [UIColor colorWithWhite:0 alpha:0.55];
+  _padLabel.textAlignment = NSTextAlignmentCenter;
+  _padLabel.font = [UIFont systemFontOfSize:12];
+  _padLabel.text = @"Pads: ?";
+  [_padWindow.rootViewController.view addSubview:_padLabel];
+
   _padWindow.hidden = NO;
   [self refreshLogView];
+  [self refreshPadLabel];
 
   // Install + Files-drop polling (payload can arrive any time).
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
@@ -157,6 +209,7 @@
     for (;;) {
       [NSThread sleepForTimeInterval:2.0];
       [self refreshLogView];
+      [self refreshPadLabel];
       if (!self->_engineStarted)
         [self tryInstall];
     }
