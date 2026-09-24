@@ -14,6 +14,7 @@
 #import "SVCBridge.h"
 #import "GamepadView.h"
 #import "AssetDownloader.h"
+#import "SVCGamepadBridge.h"
 
 @interface SVCAppDelegate : UIResponder <UIApplicationDelegate>
 @property (strong, nonatomic) UIWindow *window;
@@ -67,16 +68,15 @@
   pad.autoresizingMask =
       UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
   [self->_padWindow.rootViewController.view addSubview:pad];
-  // Diagnostics hide themselves once the game is up; triple-tap anywhere
-  // brings them back.
+  // Diagnostics hide synchronously: the main thread is about to block
+  // inside the engine, so no main-queue timer could fire afterwards.
+  // Triple-tap (event-driven) brings them back.
+  [self setOverlayHidden:YES];
+  [SVCGamepadBridge startPolling];
   UITapGestureRecognizer *triple = [[UITapGestureRecognizer alloc]
       initWithTarget:self action:@selector(toggleOverlay)];
   triple.numberOfTapsRequired = 3;
   [self->_padWindow.rootViewController.view addGestureRecognizer:triple];
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(12 * NSEC_PER_SEC)),
-                 dispatch_get_main_queue(), ^{
-    [self setOverlayHidden:YES];
-  });
   // Blocks inside the engine's game loop (pumps SDL events per frame).
   SVCStart([self->_docs UTF8String]);
 }

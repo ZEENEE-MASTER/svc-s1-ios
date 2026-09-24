@@ -141,6 +141,11 @@ def main() -> None:
     patch(src / "system_sdl.go",
           '\t\t_, forceWindowed := sys.cmdFlags["-windowed"]\n\t\tfullscreen := s.cfg.Video.Fullscreen && !forceWindowed',
           '\t\t_, forceWindowed := sys.cmdFlags["-windowed"]\n\t\tfullscreen := s.cfg.Video.Fullscreen && !forceWindowed\n\t\tif runtime.GOOS == "ios" {\n\t\t\tfullscreen = true\n\t\t}')
+    # ...at the native display size (a 1280x720 default would stay a small
+    # centered rectangle on a phone screen).
+    patch(src / "system_sdl.go",
+          '\t\tif sys.cfg.Video.WindowWidth > 0 || sys.cfg.Video.WindowHeight > 0 {\n\t\t\tw2, h2 = int32(sys.cfg.Video.WindowWidth), int32(sys.cfg.Video.WindowHeight)\n\t\t}',
+          '\t\tif sys.cfg.Video.WindowWidth > 0 || sys.cfg.Video.WindowHeight > 0 {\n\t\t\tw2, h2 = int32(sys.cfg.Video.WindowWidth), int32(sys.cfg.Video.WindowHeight)\n\t\t}\n\t\tif runtime.GOOS == "ios" && fullscreen {\n\t\t\tif db, dberr := sdl.GetDisplayBounds(0); dberr == nil {\n\t\t\t\tw2, h2 = db.W, db.H\n\t\t\t}\n\t\t}')
     for old, new in [
         ('if runtime.GOOS != "android" {\n\t\t\tmode, err := sdl.GetDesktopDisplayMode(0)',
          'if runtime.GOOS != "android" && runtime.GOOS != "ios" {\n\t\t\tmode, err := sdl.GetDesktopDisplayMode(0)'),

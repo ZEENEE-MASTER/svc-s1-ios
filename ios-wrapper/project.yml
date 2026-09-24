@@ -48,7 +48,7 @@ targets:
           "-framework", "MetalKit",
           "-framework", "QuartzCore",
           "-framework", "IOSurface",
-          "-weak_framework", "GameController",
+          "-framework", "GameController",
         ]
     dependencies:
       - framework: third-party/SDL2.xcframework

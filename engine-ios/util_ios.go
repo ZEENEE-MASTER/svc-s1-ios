@@ -110,6 +110,10 @@ func SVCStart(cBaseDir *C.char) {
 	}
 	Logcat("SVCStart: baseDir=" + baseDir)
 	sys.baseDir = baseDir
+	// MFi input arrives through our own GameController->keyboard bridge
+	// (SVCGamepadBridge), so the engine's native joystick layer stays off:
+	// single deterministic input path, no double-mapped buttons.
+	os.Args = []string{"svc-s1", "-nojoy"}
 	realMain()
 }
 
