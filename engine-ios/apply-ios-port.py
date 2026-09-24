@@ -77,9 +77,20 @@ def main() -> None:
     patch(src / "render_vk.go",
           'func (r *Renderer_VK) NewVulkanDevice(appInfo *vk.ApplicationInfo, window uintptr) error {\n\t// create a Vulkan instance.',
           'func (r *Renderer_VK) NewVulkanDevice(appInfo *vk.ApplicationInfo, window uintptr) error {\n\tif runtime.GOOS == "ios" {\n\t\tif err := sdl.VulkanLoadLibrary(""); err != nil {\n\t\t\treturn fmt.Errorf("VulkanLoadLibrary failed: %w", err)\n\t\t}\n\t}\n\t// create a Vulkan instance.')
+    # MoltenVK 1.4+: VK_KHR_portability_enumeration is GONE (devices enumerate
+    # without it). An earlier revision of this script added it — remove that
+    # block wherever present; fresh trees simply skip.
+    try:
+        patch(src / "render_vk.go",
+              '\tif runtime.GOOS == "ios" {\n\t\tinstanceExtensions = append(instanceExtensions, vk.KhrPortabilityEnumerationExtensionName+"\\x00")\n\t\tinstanceCreateInfo.PpEnabledExtensionNames = instanceExtensions\n\t\tinstanceCreateInfo.EnabledExtensionCount = uint32(len(instanceExtensions))\n\t\tinstanceCreateInfo.Flags = vk.InstanceCreateFlags(vk.InstanceCreateEnumeratePortabilityBit)\n\t}\n',
+              '')
+    except AssertionError:
+        print("  portability block absent, skipping")
+    # No discrete GPU on iOS (integrated Apple GPU): take limits from device 0
+    # instead of leaving zeros (e.g. maxAnisotropy).
     patch(src / "render_vk.go",
-          '\t// }\n\tvkDebug = sys.cfg.Video.RendererDebugMode',
-          '\t// }\n\tif runtime.GOOS == "ios" {\n\t\tinstanceExtensions = append(instanceExtensions, vk.KhrPortabilityEnumerationExtensionName+"\\x00")\n\t\tinstanceCreateInfo.PpEnabledExtensionNames = instanceExtensions\n\t\tinstanceCreateInfo.EnabledExtensionCount = uint32(len(instanceExtensions))\n\t\tinstanceCreateInfo.Flags = vk.InstanceCreateFlags(vk.InstanceCreateEnumeratePortabilityBit)\n\t}\n\tvkDebug = sys.cfg.Video.RendererDebugMode')
+          '\t\t\tr.gpuIndex = uint32(i)\n\t\t\tbreak\n\t\t}\n\t}\n\tqueueCreateInfos := []vk.DeviceQueueCreateInfo{{',
+          '\t\t\tr.gpuIndex = uint32(i)\n\t\t\tbreak\n\t\t}\n\t}\n\tif len(r.gpuDevices) > 0 && r.maxAnisotropy == 0 {\n\t\tvar gp vk.PhysicalDeviceProperties\n\t\tvk.GetPhysicalDeviceProperties(r.gpuDevices[r.gpuIndex], &gp)\n\t\tgp.Deref()\n\t\tr.maxAnisotropy = gp.Limits.MaxSamplerAnisotropy\n\t\tr.minUniformBufferOffsetAlignment = uint32(gp.Limits.MinUniformBufferOffsetAlignment)\n\t\tr.maxImageArrayLayers = uint32(gp.Limits.MaxImageArrayLayers)\n\t}\n\tqueueCreateInfos := []vk.DeviceQueueCreateInfo{{')
 
     # iOS EAGL maxes out at GLES 3.0: a 3.2 context can never be created.
     patch(src / "main.go",
