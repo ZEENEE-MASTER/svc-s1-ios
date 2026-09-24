@@ -64,6 +64,7 @@ jobs:
           export CGO_LDFLAGS="-isysroot $SDKROOT -miphoneos-version-min=${MIN_IOS} -arch arm64 -L$GITHUB_WORKSPACE/ios-deps/lib"
           go mod download
           go build -buildmode=c-archive -trimpath \
+            -ldflags "-X 'main.Version=ios-${GITHUB_RUN_NUMBER}' -X 'main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)'" \
             -o "$GITHUB_WORKSPACE/libsvcengine.a" ./src 2>&1 | tee /tmp/ios-archive.log
           ls -la "$GITHUB_WORKSPACE/libsvcengine.a"
           echo "--- exports ---"
