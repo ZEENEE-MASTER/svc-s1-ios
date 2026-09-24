@@ -119,6 +119,16 @@ jobs:
           fi
           hdiutil detach "$VOL" -quiet || true
           ls ios-wrapper/third-party/
+      - name: MoltenVK (v1.4.2, sha-pinned, static)
+        run: |
+          set -euo pipefail
+          curl -sL -o /tmp/MoltenVK-ios.tar https://github.com/KhronosGroup/MoltenVK/releases/download/v1.4.2/MoltenVK-ios.tar
+          echo "B5D947B1660E6E9FED40B9CD2387E160AAAB9E80B775C0CEF7E14059405178C1  /tmp/MoltenVK-ios.tar" | shasum -a 256 -c -
+          rm -rf /tmp/mvk && mkdir -p /tmp/mvk && tar -xf /tmp/MoltenVK-ios.tar -C /tmp/mvk
+          cp /tmp/mvk/MoltenVK/MoltenVK/static/MoltenVK.xcframework/ios-arm64/libMoltenVK.a ios-wrapper/third-party/
+          mkdir -p ios-wrapper/third-party/MoltenVK-include
+          cp -R /tmp/mvk/MoltenVK/MoltenVK/include/* ios-wrapper/third-party/MoltenVK-include/
+          ls ios-wrapper/third-party/
       - name: Native dep archives (from engine job)
         run: |
           set -euo pipefail

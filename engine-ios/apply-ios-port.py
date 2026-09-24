@@ -29,6 +29,22 @@ def patch(path: Path, old: str, new: str) -> None:
     print(f"  patched: {path.name}")
 
 
+def patch_any(path: Path, variants: list) -> None:
+    """Apply the first variant whose old-string matches exactly once.
+    Variants are tried longest-old-first so a short old-string can never
+    match inside an already-patched longer line."""
+    text = path.read_text(encoding="utf-8", newline="")
+    if any(new in text for _, new in variants):
+        print(f"  already applied: {path.name}")
+        return
+    for old, new in sorted(variants, key=lambda v: len(v[0]), reverse=True):
+        if text.count(old) == 1:
+            path.write_text(text.replace(old, new), encoding="utf-8", newline="")
+            print(f"  patched: {path.name}")
+            return
+    raise AssertionError(f"{path}: no variant matched")
+
+
 def main() -> None:
     engine = Path(sys.argv[1])
     util_ios = Path(sys.argv[2])
@@ -39,8 +55,14 @@ def main() -> None:
     patch(src / "render_gl33.go", "//go:build !android", "//go:build !android && !ios")
     patch(src / "font_gles32.go", "//go:build android", "//go:build android || ios")
     patch(src / "render_gles32.go", "//go:build android", "//go:build android || ios")
-    patch(src / "font_vk.go", "//go:build !kinc && !android", "//go:build !kinc && !android && !ios")
-    patch(src / "render_vk.go", "//go:build !kinc && !android", "//go:build !kinc && !android && !ios")
+    patch_any(src / "font_vk.go", [
+        ("//go:build !kinc && !android", "//go:build !kinc && (!android || ios)"),
+        ("//go:build !kinc && !android && !ios", "//go:build !kinc && (!android || ios)"),
+    ])
+    patch_any(src / "render_vk.go", [
+        ("//go:build !kinc && !android", "//go:build !kinc && (!android || ios)"),
+        ("//go:build !kinc && !android && !ios", "//go:build !kinc && (!android || ios)"),
+    ])
     patch(src / "util_desktop.go", "//go:build !raw && !android", "//go:build !raw && !android && !ios")
     # GOOS=ios also satisfies the `darwin` build tag: keep darwin-only
     # helpers (osPreferredLanguage via /usr/bin/defaults) off iOS.
@@ -49,6 +71,15 @@ def main() -> None:
     patch(src / "render_gles32.go",
           'if runtime.GOOS != "android" {',
           'if runtime.GOOS != "android" && runtime.GOOS != "ios" {')
+
+    # MoltenVK on iOS: explicit loader init (static link resolves via
+    # dlsym(RTLD_DEFAULT)) + portability enumeration for device discovery.
+    patch(src / "render_vk.go",
+          'func (r *Renderer_VK) NewVulkanDevice(appInfo *vk.ApplicationInfo, window uintptr) error {\n\t// create a Vulkan instance.',
+          'func (r *Renderer_VK) NewVulkanDevice(appInfo *vk.ApplicationInfo, window uintptr) error {\n\tif runtime.GOOS == "ios" {\n\t\tif err := sdl.VulkanLoadLibrary(""); err != nil {\n\t\t\treturn fmt.Errorf("VulkanLoadLibrary failed: %w", err)\n\t\t}\n\t}\n\t// create a Vulkan instance.')
+    patch(src / "render_vk.go",
+          '\t// }\n\tvkDebug = sys.cfg.Video.RendererDebugMode',
+          '\t// }\n\tif runtime.GOOS == "ios" {\n\t\tinstanceExtensions = append(instanceExtensions, vk.KhrPortabilityEnumerationExtensionName+"\\x00")\n\t\tinstanceCreateInfo.PpEnabledExtensionNames = instanceExtensions\n\t\tinstanceCreateInfo.EnabledExtensionCount = uint32(len(instanceExtensions))\n\t\tinstanceCreateInfo.Flags = vk.InstanceCreateFlags(vk.InstanceCreateEnumeratePortabilityBit)\n\t}\n\tvkDebug = sys.cfg.Video.RendererDebugMode')
 
     # iOS EAGL maxes out at GLES 3.0: a 3.2 context can never be created.
     patch(src / "main.go",
@@ -74,9 +105,14 @@ def main() -> None:
     patch(src / "main.go",
           'if runtime.GOOS == "android" {\n\t\tsdl.InitSubSystem(sdl.INIT_JOYSTICK)',
           'if runtime.GOOS == "android" || runtime.GOOS == "ios" {\n\t\tsdl.InitSubSystem(sdl.INIT_JOYSTICK)')
+    # iOS renders through MoltenVK (EAGL is ES 2.0-only on modern iOS);
+    # Android keeps the GLES path.
     patch(src / "main.go",
-          '// Force to OpenGL ES 3.2 for Android\n\tif runtime.GOOS == "android" {',
-          '// Force to OpenGL ES 3.2 for Android\n\tif runtime.GOOS == "android" || runtime.GOOS == "ios" {')
+          '// Force to OpenGL ES 3.2 for Android\n\tif runtime.GOOS == "android" || runtime.GOOS == "ios" {',
+          '// Force to OpenGL ES 3.2 for Android\n\tif runtime.GOOS == "android" {')
+    patch(src / "main.go",
+          '\tcfg.Video.RenderMode = "OpenGL ES 3.2"\n\t}',
+          '\tcfg.Video.RenderMode = "OpenGL ES 3.2"\n\t}\n\tif runtime.GOOS == "ios" {\n\t\tcfg.Video.RenderMode = "Vulkan 1.3"\n\t}')
 
     patch(src / "system.go",
           'if runtime.GOOS != "android" {\n\t\texePath, err := os.Executable()',
@@ -85,9 +121,11 @@ def main() -> None:
           'if runtime.GOOS != "android" {\n\t\t// So now that we have a window we add an icon.',
           'if runtime.GOOS != "android" && runtime.GOOS != "ios" {\n\t\t// So now that we have a window we add an icon.')
 
+    # system_sdl: iOS+Vulkan takes the generic (Vulkan-aware) window path,
+    # not Android's forced-GLES one. Config is forced to Vulkan on iOS.
     patch(src / "system_sdl.go",
-          '\tif runtime.GOOS == "android" {\n\t\t// On Android, we MUST use 0,0',
-          '\tif runtime.GOOS == "android" || runtime.GOOS == "ios" {\n\t\t// On Android, we MUST use 0,0')
+          '\tif runtime.GOOS == "android" || runtime.GOOS == "ios" {\n\t\t// On Android, we MUST use 0,0',
+          '\tif runtime.GOOS == "android" || (runtime.GOOS == "ios" && s.cfg.Video.RenderMode != "Vulkan 1.3") {\n\t\t// On Android, we MUST use 0,0')
     for old, new in [
         ('if runtime.GOOS != "android" {\n\t\t\tmode, err := sdl.GetDesktopDisplayMode(0)',
          'if runtime.GOOS != "android" && runtime.GOOS != "ios" {\n\t\t\tmode, err := sdl.GetDesktopDisplayMode(0)'),

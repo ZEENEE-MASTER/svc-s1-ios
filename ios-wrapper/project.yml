@@ -29,6 +29,7 @@ targets:
         OTHER_LDFLAGS: [
           "$(inherited)",
           "-force_load", "$(SRCROOT)/third-party/libsvcengine.a",
+          "-force_load", "$(SRCROOT)/third-party/libMoltenVK.a",
           "$(SRCROOT)/third-party/libavformat.a",
           "$(SRCROOT)/third-party/libavcodec.a",
           "$(SRCROOT)/third-party/libavutil.a",
@@ -37,12 +38,16 @@ targets:
           "$(SRCROOT)/third-party/libavfilter.a",
           "$(SRCROOT)/third-party/libvpx.a",
           "$(SRCROOT)/third-party/libxmp.a",
-          "-lz", "-lbz2", "-liconv",
+          "-lz", "-lbz2", "-liconv", "-lc++",
           "-framework", "AVFoundation",
           "-framework", "AudioToolbox",
           "-framework", "VideoToolbox",
           "-framework", "CoreMedia",
           "-framework", "CoreVideo",
+          "-framework", "Metal",
+          "-framework", "MetalKit",
+          "-framework", "QuartzCore",
+          "-framework", "IOSurface",
           "-weak_framework", "GameController",
         ]
     dependencies:

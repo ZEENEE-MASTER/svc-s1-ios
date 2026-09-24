@@ -143,6 +143,10 @@ func eglGetProcAddress(name string) unsafe.Pointer {
 }
 
 func selectRenderer(cfgVal string) (Renderer, FontRenderer) {
+	// iOS renders through MoltenVK; GLES32 stays as fallback.
+	if cfgVal == "Vulkan 1.3" {
+		return &Renderer_VK{}, &FontRenderer_VK{}
+	}
 	return &Renderer_GLES32{}, &FontRenderer_GLES32{}
 }
 
