@@ -64,8 +64,10 @@ static void pushKey(NSString *control, BOOL down) {
         }
         for (NSString *k in now) {
           BOOL was = [state[k] boolValue], is = [now[k] boolValue];
-          if (is != was)
+          if (is != was) {
+            NSLog(@"[SVC-S1] pad %@ %@", k, is ? @"down" : @"up");
             pushKey(k, is);
+          }
         }
         [state setDictionary:now];
       }

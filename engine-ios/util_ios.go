@@ -16,6 +16,9 @@ package main
 #include <stdio.h>
 #include "SDL.h"
 
+// Implemented in the ObjC shell (main.m).
+void SVCGetScreenPoints(float *w, float *h);
+
 // Runs at library load, BEFORE the Go runtime starts.
 __attribute__((constructor))
 static void svc_prepare_go_runtime() {
@@ -144,6 +147,17 @@ func SVCSetBaseDir(cPath *C.char) {
 
 func eglGetProcAddress(name string) unsafe.Pointer {
 	return sdl.GLGetProcAddress(name)
+}
+
+// Native screen size in points, landscape-first (see SVCBridge.h).
+// SDL reports a bogus 320x480 before any window exists.
+func svcScreenPoints() (int32, int32) {
+	var w, h C.float
+	C.SVCGetScreenPoints(&w, &h)
+	if w <= 0 || h <= 0 {
+		return 0, 0
+	}
+	return int32(w), int32(h)
 }
 
 func selectRenderer(cfgVal string) (Renderer, FontRenderer) {

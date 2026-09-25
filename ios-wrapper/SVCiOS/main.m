@@ -218,3 +218,12 @@ int main(int argc, char *argv[]) {
     return UIApplicationMain(argc, argv, nil, NSStringFromClass([SVCAppDelegate class]));
   }
 }
+
+// Engine asks for the native screen size (SDL reports 320x480 pre-window).
+void SVCGetScreenPoints(float *w, float *h) {
+  CGSize s = [UIScreen mainScreen].bounds.size;
+  if (w)
+    *w = (float)(s.width > s.height ? s.width : s.height);
+  if (h)
+    *h = (float)(s.height > s.width ? s.height : s.width);
+}

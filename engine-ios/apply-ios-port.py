@@ -148,12 +148,12 @@ def main() -> None:
     patch(src / "system_sdl.go",
           '\t\t_, forceWindowed := sys.cmdFlags["-windowed"]\n\t\tfullscreen := s.cfg.Video.Fullscreen && !forceWindowed',
           '\t\t_, forceWindowed := sys.cmdFlags["-windowed"]\n\t\tfullscreen := s.cfg.Video.Fullscreen && !forceWindowed\n\t\tif runtime.GOOS == "ios" {\n\t\t\tfullscreen = true\n\t\t}')
-    # ...at SDL's discretion: pre-window GetDisplayBounds returns a bogus
-    # 320x480 on iOS, so pass 0,0 and let SDL fill the native screen
-    # (a 1280x720 default would stay a small centered rectangle).
+    # ...at the NATIVE size: SDL reports bogus 320x480 pre-window and a
+    # 1280x720 default stays a small centered rectangle. Landscape-first
+    # points come from UIKit (SVCGetScreenPoints in the ObjC shell).
     patch(src / "system_sdl.go",
           '\t\tif sys.cfg.Video.WindowWidth > 0 || sys.cfg.Video.WindowHeight > 0 {\n\t\t\tw2, h2 = int32(sys.cfg.Video.WindowWidth), int32(sys.cfg.Video.WindowHeight)\n\t\t}',
-          '\t\tif sys.cfg.Video.WindowWidth > 0 || sys.cfg.Video.WindowHeight > 0 {\n\t\t\tw2, h2 = int32(sys.cfg.Video.WindowWidth), int32(sys.cfg.Video.WindowHeight)\n\t\t}\n\t\tif runtime.GOOS == "ios" && fullscreen {\n\t\t\tw2, h2 = 0, 0\n\t\t}')
+          '\t\tif sys.cfg.Video.WindowWidth > 0 || sys.cfg.Video.WindowHeight > 0 {\n\t\t\tw2, h2 = int32(sys.cfg.Video.WindowWidth), int32(sys.cfg.Video.WindowHeight)\n\t\t}\n\t\tif runtime.GOOS == "ios" && fullscreen {\n\t\t\tif sw, sh := svcScreenPoints(); sw > 0 && sh > 0 {\n\t\t\t\tw2, h2 = sw, sh\n\t\t\t}\n\t\t}')
     for old, new in [
         ('if runtime.GOOS != "android" {\n\t\t\tmode, err := sdl.GetDesktopDisplayMode(0)',
          'if runtime.GOOS != "android" && runtime.GOOS != "ios" {\n\t\t\tmode, err := sdl.GetDesktopDisplayMode(0)'),
