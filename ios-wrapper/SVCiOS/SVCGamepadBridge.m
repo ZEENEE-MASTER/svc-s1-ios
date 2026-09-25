@@ -40,8 +40,18 @@ static void pushKey(NSString *control, BOOL down) {
   started = YES;
   NSMutableDictionary<NSString *, NSNumber *> *state = [NSMutableDictionary dictionary];
   dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INTERACTIVE, 0), ^{
+    unsigned long ticks = 0;
     for (;;) {
       @autoreleasepool {
+        NSArray<GCController *> *pads = [GCController controllers];
+        if (++ticks % 600 == 0) {
+          NSMutableArray *names = [NSMutableArray array];
+          for (GCController *c in pads) {
+            [names addObject:c.vendorName ?: @"?"];
+          }
+          NSLog(@"[SVC-S1] pads visible: %lu (%@)", (unsigned long)pads.count,
+                [names componentsJoinedByString:@", "]);
+        }
         NSMutableDictionary<NSString *, NSNumber *> *now = [NSMutableDictionary dictionary];
         for (GCController *c in [GCController controllers]) {
           GCExtendedGamepad *g = c.extendedGamepad;

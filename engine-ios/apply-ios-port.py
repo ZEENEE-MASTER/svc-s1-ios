@@ -154,6 +154,10 @@ def main() -> None:
     patch(src / "system_sdl.go",
           '\t\tif sys.cfg.Video.WindowWidth > 0 || sys.cfg.Video.WindowHeight > 0 {\n\t\t\tw2, h2 = int32(sys.cfg.Video.WindowWidth), int32(sys.cfg.Video.WindowHeight)\n\t\t}',
           '\t\tif sys.cfg.Video.WindowWidth > 0 || sys.cfg.Video.WindowHeight > 0 {\n\t\t\tw2, h2 = int32(sys.cfg.Video.WindowWidth), int32(sys.cfg.Video.WindowHeight)\n\t\t}\n\t\tif runtime.GOOS == "ios" && fullscreen {\n\t\t\tif sw, sh := svcScreenPoints(); sw > 0 && sh > 0 {\n\t\t\t\tw2, h2 = sw, sh\n\t\t\t}\n\t\t}')
+    # iOS diagnostics: log the real window size (fullscreen auditing).
+    patch(src / "system_sdl.go",
+          '\tfor i := range input.controllers {',
+          '\tif runtime.GOOS == "ios" {\n\t\tww, hh := window.GetSize()\n\t\tLogcat(fmt.Sprintf("iOS window: %dx%d fullscreen=%v w2=%d h2=%d", ww, hh, fullscreen, w2, h2))\n\t}\n\tfor i := range input.controllers {')
     for old, new in [
         ('if runtime.GOOS != "android" {\n\t\t\tmode, err := sdl.GetDesktopDisplayMode(0)',
          'if runtime.GOOS != "android" && runtime.GOOS != "ios" {\n\t\t\tmode, err := sdl.GetDesktopDisplayMode(0)'),

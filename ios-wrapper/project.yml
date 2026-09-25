@@ -19,7 +19,7 @@ targets:
       path: SVCiOS/Info.plist
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.zeenee.svc-s1
+        PRODUCT_BUNDLE_IDENTIFIER: com.zeenee.svc-s1c
         PRODUCT_NAME: SVC_S1
         INFOPLIST_FILE: SVCiOS/Info.plist
         CODE_SIGNING_ALLOWED: "NO"
