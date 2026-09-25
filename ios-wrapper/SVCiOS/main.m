@@ -172,7 +172,9 @@
   _statusLabel.numberOfLines = 0;
   _statusLabel.textAlignment = NSTextAlignmentCenter;
   _statusLabel.font = [UIFont boldSystemFontOfSize:16];
-  _statusLabel.text = @"SVC S1 starting…";
+  NSString *buildNo = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"];
+  _statusLabel.text = [NSString stringWithFormat:@"SVC S1 · build %@",
+                                                 buildNo ?: @"?"];
   [_padWindow.rootViewController.view addSubview:_statusLabel];
 
   _logView = [[UITextView alloc] initWithFrame:CGRectMake(20, 140, b.size.width - 40, 190)];

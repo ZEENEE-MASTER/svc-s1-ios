@@ -151,6 +151,11 @@ jobs:
           ls -la ios-wrapper/SVCiOS/Resources/
         env:
           GH_TOKEN: ${{ github.token }}
+      - name: Stamp build number (stale-build detection on device)
+        run: |
+          set -euo pipefail
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${GITHUB_RUN_NUMBER}" ios-wrapper/SVCiOS/Info.plist
+          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" ios-wrapper/SVCiOS/Info.plist
       - name: Generate Xcode project
         run: |
           brew install xcodegen
