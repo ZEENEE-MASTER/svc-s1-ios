@@ -137,6 +137,11 @@ def main() -> None:
     patch(src / "system_sdl.go",
           '\tif runtime.GOOS == "android" || runtime.GOOS == "ios" {\n\t\t// On Android, we MUST use 0,0',
           '\tif runtime.GOOS == "android" || (runtime.GOOS == "ios" && s.cfg.Video.RenderMode != "Vulkan 1.3") {\n\t\t// On Android, we MUST use 0,0')
+    # iOS is landscape-only (Backbone, fullscreen fighter): pin SDL's view
+    # controller orientations or the app sits in portrait.
+    patch(src / "main.go",
+          '\t\tsdl.GLSetAttribute(sdl.GL_DEPTH_SIZE, 24)',
+          '\t\tsdl.GLSetAttribute(sdl.GL_DEPTH_SIZE, 24)\n\t\tif runtime.GOOS == "ios" {\n\t\t\tsdl.SetHint(sdl.HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight")\n\t\t}')
     # iOS is fullscreen-only (no windowed desktop): force it.
     patch(src / "system_sdl.go",
           '\t\t_, forceWindowed := sys.cmdFlags["-windowed"]\n\t\tfullscreen := s.cfg.Video.Fullscreen && !forceWindowed',

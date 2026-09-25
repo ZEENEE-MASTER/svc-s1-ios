@@ -12,7 +12,6 @@
 #import <UIKit/UIKit.h>
 #include <SDL2/SDL.h>
 #import "SVCBridge.h"
-#import "GamepadView.h"
 #import "AssetDownloader.h"
 #import "SVCGamepadBridge.h"
 
@@ -63,11 +62,7 @@
     return;
   self->_engineStarted = YES;
   [self setStatus:@"Entering the ring…"];
-  SVCGamepadView *pad = [[SVCGamepadView alloc]
-      initWithFrame:self->_padWindow.bounds];
-  pad.autoresizingMask =
-      UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-  [self->_padWindow.rootViewController.view addSubview:pad];
+  // No touch controls: Backbone (MFi bridge) is the input.
   // Diagnostics hide synchronously: the main thread is about to block
   // inside the engine, so no main-queue timer could fire afterwards.
   // Triple-tap (event-driven) brings them back.
