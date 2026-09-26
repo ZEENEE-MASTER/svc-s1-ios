@@ -10,6 +10,7 @@
 // status, live engine-log tail, and the touch gamepad.
 #define SDL_MAIN_HANDLED
 #import <UIKit/UIKit.h>
+#import <GameController/GameController.h>
 #include <SDL2/SDL.h>
 #import "SVCBridge.h"
 #import "AssetDownloader.h"
@@ -156,6 +157,13 @@
   }
   freopen([_logPath UTF8String], "w", stderr);
   NSLog(@"[SVC-S1] launch: manual bootstrap");
+  {
+    CGRect sb = [UIScreen mainScreen].bounds;
+    NSLog(@"[SVC-S1] screen: %.0fx%.0f scale %.0f (native 480x320 here = letterboxed)",
+          sb.size.width, sb.size.height, [UIScreen mainScreen].scale);
+    NSArray<GCController *> *pre = [GCController controllers];
+    NSLog(@"[SVC-S1] pads at boot: %lu", (unsigned long)pre.count);
+  }
   if (prevTail.length)
     NSLog(@"[SVC-S1] previous run tail:\n%@", prevTail);
 

@@ -157,7 +157,7 @@ def main() -> None:
     # iOS diagnostics: log the real window size (fullscreen auditing).
     patch(src / "system_sdl.go",
           '\tfor i := range input.controllers {',
-          '\tif runtime.GOOS == "ios" {\n\t\tasw, ash := svcScreenPoints()\n\t\tLogcat(fmt.Sprintf("iOS size audit: screen=%dx%d cfg=%dx%d", asw, ash, int32(sys.cfg.Video.WindowWidth), int32(sys.cfg.Video.WindowHeight)))\n\t\tww, hh := window.GetSize()\n\t\tLogcat(fmt.Sprintf("iOS window: %dx%d fullscreen=%v w2=%d h2=%d", ww, hh, fullscreen, w2, h2))\n\t}\n\tfor i := range input.controllers {')
+          '\tif runtime.GOOS == "ios" {\n\t\tasw, ash := svcScreenPoints()\n\t\tLogcat(fmt.Sprintf("iOS size audit: screen=%dx%d cfg=%dx%d", asw, ash, int32(sys.cfg.Video.WindowWidth), int32(sys.cfg.Video.WindowHeight)))\n\t\tif db2, db2err := sdl.GetDisplayBounds(0); db2err == nil {\n\t\t\tLogcat(fmt.Sprintf("iOS display bounds now: %dx%d", db2.W, db2.H))\n\t\t}\n\t\tww, hh := window.GetSize()\n\t\tLogcat(fmt.Sprintf("iOS window: %dx%d fullscreen=%v w2=%d h2=%d", ww, hh, fullscreen, w2, h2))\n\t}\n\tfor i := range input.controllers {')
     for old, new in [
         ('if runtime.GOOS != "android" {\n\t\t\tmode, err := sdl.GetDesktopDisplayMode(0)',
          'if runtime.GOOS != "android" && runtime.GOOS != "ios" {\n\t\t\tmode, err := sdl.GetDesktopDisplayMode(0)'),
