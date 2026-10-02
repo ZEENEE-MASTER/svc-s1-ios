@@ -172,6 +172,10 @@ def main() -> None:
     ]:
         patch(src / "system_sdl.go", old, new)
 
+    # iOS fills the whole phone screen: never letterbox, stretch to fill.
+    patch(src / "system_sdl.go",
+          '\t// If aspect ratio should not be kept, just return full window\n\tif !sys.cfg.Video.KeepAspect {',
+          '\t// If aspect ratio should not be kept, just return full window\n\tif !sys.cfg.Video.KeepAspect || runtime.GOOS == "ios" {')
     # Panic message mentions Android only; keep accurate.
     patch(src / "main.go",
           'panic("FATAL: Android baseDir not set")',
