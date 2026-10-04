@@ -6,6 +6,8 @@
 + (BOOL)unzipFile:(NSString *)zipPath
             toDir:(NSString *)dir
          progress:(void (^)(NSUInteger current, NSUInteger total, NSString *entry))progress;
++ (BOOL)installPack:(NSString *)zipPath;
++ (void)installSidecarPacks:(void (^)(NSUInteger, NSUInteger, NSString *))progress;
 @end
 
 @implementation AssetDownloader
@@ -96,15 +98,54 @@
     if (ok && [self payloadPresent]) {
       if (note)
         *note = @"bundled lite installed";
+      [self installSidecarPacks:progress];
       return YES;
     }
     if (note)
       *note = @"bundled zip present but payload incomplete after unzip";
     return NO;
   }
+  // Payload present but extra packs may wait: install any *.zip dropped
+  // in Documents (full-roster packs), then report ready.
+  [self installSidecarPacks:progress];
+  if ([self payloadPresent]) {
+    if (note)
+      *note = @"present";
+    return YES;
+  }
   if (note)
     *note = @"no payload in Documents and none bundled";
   return NO;
+}
+
+// Full-roster path: every pack zip dropped in Documents installs into its
+// engine location (see installPack mapping) and is deleted afterwards,
+// so this scan is a no-op once caught up.
++ (void)installSidecarPacks:(void (^)(NSUInteger, NSUInteger, NSString *))progress {
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSString *docs = [self documentsDir];
+  NSArray *files = [fm contentsOfDirectoryAtPath:docs error:nil];
+  // data-full first (full select.def), then the rest alphabetically.
+  NSMutableArray *zips = [NSMutableArray array];
+  for (NSString *f in files) {
+    if ([[f.pathExtension lowercaseString] isEqualToString:@"zip"])
+      [zips addObject:f];
+  }
+  [zips sortUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+    BOOL ad = [a hasPrefix:@"data-full"], bd = [b hasPrefix:@"data-full"];
+    if (ad != bd)
+      return ad ? NSOrderedAscending : NSOrderedDescending;
+    return [a compare:b];
+  }];
+  for (NSString *f in zips) {
+    NSString *full = [docs stringByAppendingPathComponent:f];
+    NSLog(@"[SVC-S1] installing pack %@ …", f);
+    if ([self installPack:full])
+      [fm removeItemAtPath:full error:nil];
+    else
+      NSLog(@"[SVC-S1] pack %@ did not match a known target, kept", f);
+  }
+  (void)progress;
 }
 
 + (BOOL)unzipFile:(NSString *)zipPath toDir:(NSString *)dir {
