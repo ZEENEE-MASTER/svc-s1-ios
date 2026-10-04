@@ -75,8 +75,9 @@ static void pushKey(NSString *control, BOOL down) {
         for (NSString *k in now) {
           BOOL was = [state[k] boolValue], is = [now[k] boolValue];
           if (is != was) {
-            NSLog(@"[SVC-S1] pad %@ %@", k, is ? @"down" : @"up");
-            pushKey(k, is);
+            // Telemetry only this build: pushes disabled while the native
+            // engine path is under test (avoids double input).
+            NSLog(@"[SVC-S1] pad %@ %@ (telemetry, no push)", k, is ? @"down" : @"up");
           }
         }
         [state setDictionary:now];
