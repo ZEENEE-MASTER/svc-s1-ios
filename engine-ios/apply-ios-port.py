@@ -154,7 +154,14 @@ def main() -> None:
     patch(src / "system_sdl.go",
           '\t\tif sys.cfg.Video.WindowWidth > 0 || sys.cfg.Video.WindowHeight > 0 {\n\t\t\tw2, h2 = int32(sys.cfg.Video.WindowWidth), int32(sys.cfg.Video.WindowHeight)\n\t\t}',
           '\t\tif sys.cfg.Video.WindowWidth > 0 || sys.cfg.Video.WindowHeight > 0 {\n\t\t\tw2, h2 = int32(sys.cfg.Video.WindowWidth), int32(sys.cfg.Video.WindowHeight)\n\t\t}\n\t\tif runtime.GOOS == "ios" && fullscreen {\n\t\t\tif sw, sh := svcScreenPoints(); sw > 0 && sh > 0 {\n\t\t\t\tw2, h2 = sw, sh\n\t\t\t}\n\t\t}')
-    # iOS diagnostics: log the real window size (fullscreen auditing).
+    # iOS controller census: SDL-side visibility at startup (engine thread,
+    # no runloop doubt) + hot-plug attach events.
+    patch(src / "system_sdl.go",
+          '\tfor i := range input.controllers {\n\t\tinput.controllerstate[i] = &ControllerState{Buttons: make(map[sdl.GameControllerButton]byte)}\n\t}',
+          '\tfor i := range input.controllers {\n\t\tinput.controllerstate[i] = &ControllerState{Buttons: make(map[sdl.GameControllerButton]byte)}\n\t}\n\tif runtime.GOOS == "ios" {\n\t\tnj := sdl.NumJoysticks()\n\t\tLogcat(fmt.Sprintf("iOS SDL joysticks at boot: %d", nj))\n\t\tfor ji := 0; ji < nj; ji++ {\n\t\t\tLogcat(fmt.Sprintf("iOS SDL joystick %d: %s", ji, sdl.JoystickNameForIndex(ji)))\n\t\t}\n\t}')
+    patch(src / "system_sdl.go",
+          '\tinput.controllers[slot] = controller\n\tresetControllerState(slot)',
+          '\tinput.controllers[slot] = controller\n\tif runtime.GOOS == "ios" {\n\t\tLogcat(fmt.Sprintf("iOS controller attached slot %d: %s", slot, controller.Name()))\n\t}\n\tresetControllerState(slot)')
     patch(src / "system_sdl.go",
           '\tfor i := range input.controllers {',
           '\tif runtime.GOOS == "ios" {\n\t\tasw, ash := svcScreenPoints()\n\t\tLogcat(fmt.Sprintf("iOS size audit: screen=%dx%d cfg=%dx%d", asw, ash, int32(sys.cfg.Video.WindowWidth), int32(sys.cfg.Video.WindowHeight)))\n\t\tif db2, db2err := sdl.GetDisplayBounds(0); db2err == nil {\n\t\t\tLogcat(fmt.Sprintf("iOS display bounds now: %dx%d", db2.W, db2.H))\n\t\t}\n\t\tww, hh := window.GetSize()\n\t\tLogcat(fmt.Sprintf("iOS window: %dx%d fullscreen=%v w2=%d h2=%d", ww, hh, fullscreen, w2, h2))\n\t}\n\tfor i := range input.controllers {')
